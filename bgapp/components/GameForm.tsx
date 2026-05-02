@@ -197,7 +197,14 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
 
     if (!res.ok) {
       setSaving(false);
-      show("Errore durante il salvataggio", "error");
+      if (res.status === 409) {
+        const data = await res.json().catch(() => null);
+        const items = (data?.insufficient ?? []) as { size: string; label: string | null; requested: number; available: number }[];
+        const detail = items.map(i => `${i.label || i.size}: servono ${i.requested}, disponibili ${i.available}`).join("; ");
+        show(`Magazzino bustine insufficiente. ${detail}. Rifornisci dalla pagina Bustine.`, "error");
+      } else {
+        show("Errore durante il salvataggio", "error");
+      }
       return;
     }
 

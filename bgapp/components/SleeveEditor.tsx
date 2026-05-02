@@ -7,7 +7,7 @@ interface Sleeve {
   id: number;
   size: string;
   label?: string;
-  available: number;
+  quantity: number;
 }
 
 interface SleeveEntry {
@@ -37,7 +37,7 @@ export default function SleeveEditor({ value, onChange }: Props) {
     const sleeve = allSleeves.find(s => s.id === sleeveId);
     if (!sleeve) return 0;
     const credit = initialQtyById.current.get(sleeveId) ?? 0;
-    return sleeve.available + credit - qty;
+    return sleeve.quantity + credit - qty;
   }
 
   const usedIds = new Set(value.map((e) => e.sleeveId));
@@ -84,7 +84,7 @@ export default function SleeveEditor({ value, onChange }: Props) {
                 )}
                 {availableSleeves.concat(sleeve ? [sleeve] : []).map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.size}{s.label ? ` (${s.label})` : ""} — disp. {s.available}
+                    {s.size}{s.label ? ` (${s.label})` : ""} — disp. {s.quantity}
                   </option>
                 ))}
               </select>

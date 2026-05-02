@@ -29,6 +29,27 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const body = await request.json();
 
+  // Pre-validate sleeve magazine before creating anything
+  if (Array.isArray(body.sleeves) && body.sleeves.length > 0) {
+    const requested: Record<number, number> = {};
+    for (const s of body.sleeves) {
+      const id = Number(s.sleeveId);
+      const q  = Number(s.qty ?? 0);
+      if (!id || q <= 0) continue;
+      requested[id] = (requested[id] ?? 0) + q;
+    }
+    const ids = Object.keys(requested).map(Number);
+    if (ids.length > 0) {
+      const stocks = await prisma.sleeve.findMany({ where: { id: { in: ids } } });
+      const insufficient = stocks
+        .filter(s => requested[s.id] > s.quantity)
+        .map(s => ({ sleeveId: s.id, size: s.size, label: s.label, requested: requested[s.id], available: s.quantity }));
+      if (insufficient.length > 0) {
+        return NextResponse.json({ error: "Magazzino bustine insufficiente", insufficient }, { status: 409 });
+      }
+    }
+  }
+
   // If bggId provided and no thumbnail yet, auto-fetch from BGG
   let bggData = null;
   if (body.bggId && !body.thumbnail) {
@@ -74,6 +95,10 @@ export async function POST(request: NextRequest) {
     }));
     for (const s of sleevesToCreate) {
       await prisma.gameSleeve.create({ data: s });
+      await prisma.sleeve.update({
+        where: { id: s.sleeveId },
+        data: { quantity: { decrement: s.qty } },
+      });
     }
   }
 

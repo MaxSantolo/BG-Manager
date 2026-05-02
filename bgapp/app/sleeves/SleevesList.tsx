@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 
 interface Sleeve {
   id: number;
@@ -11,18 +12,8 @@ interface Sleeve {
   quantity: number;
 }
 
-interface Usage {
-  qty: number;
-  games: number;
-}
-
-export default function SleevesList({
-  sleeves,
-  usageMap,
-}: {
-  sleeves: Sleeve[];
-  usageMap: Record<number, Usage>;
-}) {
+export default function SleevesList({ sleeves }: { sleeves: Sleeve[] }) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
 
   const filtered = sleeves.filter((s) => {
@@ -34,7 +25,6 @@ export default function SleevesList({
 
   return (
     <div className="space-y-3">
-      {/* Filters */}
       <div className="card flex flex-wrap gap-3 items-center py-3">
         <div className="relative flex-1 min-w-40">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }} />
@@ -53,24 +43,23 @@ export default function SleevesList({
         {filtered.length === 0 ? (
           <div className="text-center py-8" style={{ color: "var(--text-muted)" }}>Nessuna bustina trovata.</div>
         ) : (
-          filtered.map((sleeve) => {
-            const usage = usageMap[sleeve.id];
-            return (
-              <div key={sleeve.id} className="card flex items-center justify-between p-4">
+          filtered.map((sleeve) => (
+            <div key={sleeve.id} className="card p-4 space-y-2">
+              <div className="flex items-center justify-between">
                 <div>
                   <div className="font-semibold">{displayName(sleeve)}</div>
                   {sleeve.label && (
                     <div className="text-xs font-mono mt-0.5" style={{ color: "var(--text-muted)" }}>{sleeve.size}</div>
                   )}
-                  <div className="flex gap-3 text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
-                    <span>Disponibili: <span className="font-mono font-semibold">{sleeve.quantity}</span></span>
-                    {usage && <span>Usate: <span className="font-mono font-semibold">{usage.qty}</span> ({usage.games} giochi)</span>}
+                  <div className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
+                    A magazzino: <span className="font-mono font-semibold">{sleeve.quantity}</span>
                   </div>
                 </div>
                 <Link href={`/sleeves/${sleeve.id}`} className="btn-ghost">Modifica</Link>
               </div>
-            );
-          })
+              <RestockRow sleeveId={sleeve.id} onDone={() => router.refresh()} />
+            </div>
+          ))
         )}
       </div>
 
@@ -79,24 +68,23 @@ export default function SleevesList({
         {filtered.length === 0 ? (
           <div className="col-span-full text-center py-8" style={{ color: "var(--text-muted)" }}>Nessuna bustina trovata.</div>
         ) : (
-          filtered.map((sleeve) => {
-            const usage = usageMap[sleeve.id];
-            return (
-              <div key={sleeve.id} className="card flex items-center justify-between p-4">
+          filtered.map((sleeve) => (
+            <div key={sleeve.id} className="card p-4 space-y-2">
+              <div className="flex items-center justify-between">
                 <div>
                   <div className="font-semibold">{displayName(sleeve)}</div>
                   {sleeve.label && (
                     <div className="text-xs font-mono mt-0.5" style={{ color: "var(--text-muted)" }}>{sleeve.size}</div>
                   )}
-                  <div className="flex gap-3 text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
-                    <span>Disp.: <span className="font-mono font-semibold">{sleeve.quantity}</span></span>
-                    {usage && <span>Usate: <span className="font-mono font-semibold">{usage.qty}</span></span>}
+                  <div className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
+                    A magazzino: <span className="font-mono font-semibold">{sleeve.quantity}</span>
                   </div>
                 </div>
                 <Link href={`/sleeves/${sleeve.id}`} className="btn-ghost">Modifica</Link>
               </div>
-            );
-          })
+              <RestockRow sleeveId={sleeve.id} onDone={() => router.refresh()} />
+            </div>
+          ))
         )}
       </div>
 
@@ -107,39 +95,32 @@ export default function SleevesList({
             <tr>
               <th>Nome</th>
               <th>Dimensione</th>
-              <th className="text-right">Disponibili</th>
-              <th className="text-right">Usate</th>
-              <th className="text-right">Giochi</th>
+              <th className="text-right">A magazzino</th>
+              <th>Aggiungi</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="text-center py-8" style={{ color: "var(--text-muted)" }}>
+                <td colSpan={5} className="text-center py-8" style={{ color: "var(--text-muted)" }}>
                   Nessuna bustina trovata.
                 </td>
               </tr>
             )}
-            {filtered.map((sleeve) => {
-              const usage = usageMap[sleeve.id];
-              return (
-                <tr key={sleeve.id}>
-                  <td className="font-medium">{displayName(sleeve)}</td>
-                  <td className="font-mono text-sm" style={{ color: "var(--text-secondary)" }}>{sleeve.size}</td>
-                  <td className="text-right font-mono text-sm">{sleeve.quantity}</td>
-                  <td className="text-right font-mono text-sm" style={{ color: usage ? "var(--text-primary)" : "var(--text-muted)" }}>
-                    {usage ? usage.qty : "—"}
-                  </td>
-                  <td className="text-right font-mono text-sm" style={{ color: usage ? "var(--text-secondary)" : "var(--text-muted)" }}>
-                    {usage ? usage.games : "—"}
-                  </td>
-                  <td>
-                    <Link href={`/sleeves/${sleeve.id}`} className="btn-ghost">Modifica</Link>
-                  </td>
-                </tr>
-              );
-            })}
+            {filtered.map((sleeve) => (
+              <tr key={sleeve.id}>
+                <td className="font-medium">{displayName(sleeve)}</td>
+                <td className="font-mono text-sm" style={{ color: "var(--text-secondary)" }}>{sleeve.size}</td>
+                <td className="text-right font-mono text-sm">{sleeve.quantity}</td>
+                <td>
+                  <RestockRow sleeveId={sleeve.id} onDone={() => router.refresh()} compact />
+                </td>
+                <td>
+                  <Link href={`/sleeves/${sleeve.id}`} className="btn-ghost">Modifica</Link>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -147,6 +128,44 @@ export default function SleevesList({
       <div className="text-sm" style={{ color: "var(--text-muted)" }}>
         {filtered.length} bustine{search ? " trovate" : " totali"}
       </div>
+    </div>
+  );
+}
+
+function RestockRow({ sleeveId, onDone, compact }: { sleeveId: number; onDone: () => void; compact?: boolean }) {
+  const [n, setN] = useState("1");
+  const [busy, setBusy] = useState(false);
+
+  async function add() {
+    const delta = parseInt(n);
+    if (!Number.isFinite(delta) || delta === 0) return;
+    setBusy(true);
+    const res = await fetch(`/api/sleeves/${sleeveId}/restock`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ delta }),
+    });
+    setBusy(false);
+    if (res.ok) { setN("1"); onDone(); }
+  }
+
+  return (
+    <div className={`flex items-center gap-1.5 ${compact ? "" : "mt-1"}`}>
+      <input
+        type="number"
+        value={n}
+        onChange={(e) => setN(e.target.value)}
+        className="w-16 text-sm"
+        disabled={busy}
+      />
+      <button
+        type="button"
+        onClick={add}
+        disabled={busy}
+        className="btn-secondary text-xs flex items-center gap-1 px-2 py-1"
+      >
+        <Plus size={12} /> Aggiungi
+      </button>
     </div>
   );
 }
