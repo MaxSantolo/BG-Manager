@@ -61,8 +61,8 @@ export async function PUT(
       sleeveId: s.sleeveId,
       qty: s.qty ?? 1,
     }));
-    if (sleevesToCreate.length > 0) {
-      await prisma.gameSleeve.createMany({ data: sleevesToCreate });
+    for (const s of sleevesToCreate) {
+      await prisma.gameSleeve.create({ data: s });
     }
   }
 
@@ -80,6 +80,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  await prisma.game.delete({ where: { id: parseInt(id) } });
+  const gameId = parseInt(id);
+  await prisma.gameSleeve.deleteMany({ where: { gameId } });
+  await prisma.game.delete({ where: { id: gameId } });
   return NextResponse.json({ ok: true });
 }

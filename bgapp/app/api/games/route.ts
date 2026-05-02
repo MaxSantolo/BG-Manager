@@ -72,8 +72,8 @@ export async function POST(request: NextRequest) {
       sleeveId: s.sleeveId,
       qty: s.qty ?? 1,
     }));
-    if (sleevesToCreate.length > 0) {
-      await prisma.gameSleeve.createMany({ data: sleevesToCreate });
+    for (const s of sleevesToCreate) {
+      await prisma.gameSleeve.create({ data: s });
     }
   }
 
