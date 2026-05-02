@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import DeleteSleeveButton from "./DeleteSleeveButton";
 
 export const metadata = { title: "Modifica bustina" };
 
@@ -26,7 +27,8 @@ export default async function EditSleevePage({ params }: { params: Promise<{ id:
   const sleeve = await prisma.sleeve.findUnique({ where: { id: Number(id) } });
   if (!sleeve) return <div className="text-center mt-10">Bustina non trovata.</div>;
   return (
-    <form action={updateSleeve.bind(null, sleeve.id)} className="space-y-4 max-w-md mx-auto mt-8 card p-6">
+    <div className="max-w-md mx-auto mt-8 space-y-3">
+    <form action={updateSleeve.bind(null, sleeve.id)} className="space-y-4 card p-6">
       <h2 className="text-xl font-bold mb-2">Modifica bustina</h2>
       <div>
         <label className="block mb-1 font-medium">Dimensione *</label>
@@ -42,13 +44,11 @@ export default async function EditSleevePage({ params }: { params: Promise<{ id:
       </div>
       <div className="flex gap-2 mt-4">
         <button type="submit" className="btn-primary flex-1">Salva</button>
-        <form action={deleteSleeve.bind(null, sleeve.id)} className="flex-1">
-          <button type="submit" className="btn-danger w-full"
-            onClick={e => { if (!confirm("Eliminare questa bustina?")) e.preventDefault(); }}>
-            Elimina
-          </button>
-        </form>
       </div>
     </form>
+    <div className="flex">
+      <DeleteSleeveButton action={deleteSleeve.bind(null, sleeve.id)} />
+    </div>
+    </div>
   );
 }
