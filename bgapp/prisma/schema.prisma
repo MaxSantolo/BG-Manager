@@ -1,0 +1,127 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+model Game {
+  id            Int       @id @default(autoincrement())
+  bggId         Int?
+  name          String
+  type          String    @default("Base")
+  cost          Float?
+  salePrice     Float?
+  status        String    @default("InCollezione")
+  insert        String    @default("No")
+  sleeves       String    @default("No")
+  sleeveData    String    @default("[]") // TODO: remove after migrazione dati
+  purchaseDate  DateTime?
+  saleDate      DateTime?
+  thumbnail     String?
+  image         String?
+  description   String?
+  designers     String    @default("[]")
+  bggRating     Float?
+  bggWeight     Float?
+  minPlayers    Int?
+  maxPlayers    Int?
+  playTime      Int?
+  yearPublished Int?
+  mechanics     String    @default("[]")
+  notes         String?
+  bggEnrichedAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  gameSleeves   GameSleeve[]
+  loans         Loan[]
+  plays         Play[]
+}
+
+model WishlistGame {
+  id            Int      @id @default(autoincrement())
+  bggId         Int?
+  name          String
+  type          String   @default("Base")
+  valueRange    String?
+  desirability  Int      @default(3)
+  status        String?
+  insert        String   @default("No")
+  sleeves       String   @default("No")
+  sleeveData    String   @default("[]")
+  thumbnail     String?
+  image         String?
+  description   String?
+  designers     String   @default("[]")
+  bggRating     Float?
+  bggWeight     Float?
+  minPlayers    Int?
+  maxPlayers    Int?
+  playTime      Int?
+  yearPublished Int?
+  mechanics     String   @default("[]")
+  notes         String?
+  bggEnrichedAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Sleeve {
+  id        Int      @id @default(autoincrement())
+  size      String
+  label     String?
+  quantity  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  games     GameSleeve[]
+}
+
+model Loan {
+  id         Int       @id @default(autoincrement())
+  gameId     Int
+  game       Game      @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  borrower   String
+  loanDate   DateTime  @default(now())
+  returnDate DateTime?
+  returned   Boolean   @default(false)
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model GameSleeve {
+  id        Int      @id @default(autoincrement())
+  game      Game     @relation(fields: [gameId], references: [id])
+  gameId    Int
+  sleeve    Sleeve   @relation(fields: [sleeveId], references: [id])
+  sleeveId  Int
+  qty       Int      @default(1)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Play {
+  id         Int      @id @default(autoincrement())
+  bggPlayId  Int?     @unique
+  date       DateTime
+  quantity   Int      @default(1)
+  duration   Int?
+  location   String?
+  notes      String?
+  incomplete Boolean  @default(false)
+  gameName   String
+  bggGameId  Int?
+  gameId     Int?
+  game       Game?    @relation(fields: [gameId], references: [id], onDelete: SetNull)
+  players    String?
+  createdAt  DateTime @default(now())
+}
+
+model Settings {
+  id          Int     @id @default(autoincrement())
+  bggUsername String?
+  bggPassword String?
+}

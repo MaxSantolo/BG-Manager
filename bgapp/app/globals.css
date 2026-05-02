@@ -1,0 +1,184 @@
+@import "tailwindcss";
+
+:root {
+  --bg-base: #080d1a;
+  --bg-card: #0f1929;
+  --bg-elevated: #162035;
+  --bg-input: #1a2540;
+  --accent-red: #8b1a1a;
+  --accent-red-hover: #a52424;
+  --accent-red-light: #c0392b;
+  --accent-blue: #1e3a5f;
+  --accent-blue-light: #2563a8;
+  --text-primary: #f0ebe0;
+  --text-secondary: #9aacbf;
+  --text-muted: #5c7080;
+  --border: #1e3550;
+  --border-light: #2a4a6e;
+}
+
+@theme inline {
+  --color-bg-base: var(--bg-base);
+  --color-bg-card: var(--bg-card);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-input: var(--bg-input);
+  --color-accent-red: var(--accent-red);
+  --color-accent-red-hover: var(--accent-red-hover);
+  --color-accent-red-light: var(--accent-red-light);
+  --color-accent-blue: var(--accent-blue);
+  --color-accent-blue-light: var(--accent-blue-light);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-border: var(--border);
+  --color-border-light: var(--border-light);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  min-height: 100vh;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-base); }
+::-webkit-scrollbar-thumb { background: var(--accent-blue); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-blue-light); }
+
+/* Form inputs — kept in @layer base so Tailwind utilities (pl-8 etc.) can override */
+@layer base {
+  input, select, textarea {
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--accent-blue-light);
+  }
+  input::placeholder, textarea::placeholder {
+    color: var(--text-muted);
+  }
+  select option {
+    background-color: var(--bg-elevated);
+  }
+}
+
+/* Buttons */
+.btn-primary {
+  background-color: var(--accent-red);
+  color: var(--text-primary);
+  padding: 0.5rem 1.25rem;
+  border-radius: 6px;
+  font-weight: 600;
+  transition: background-color 0.15s;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.btn-primary:hover { background-color: var(--accent-red-hover); }
+
+.btn-secondary {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+  padding: 0.5rem 1.25rem;
+  border-radius: 6px;
+  font-weight: 500;
+  border: 1px solid var(--border-light);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: background-color 0.15s;
+}
+.btn-secondary:hover { background-color: var(--accent-blue); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s;
+}
+.btn-ghost:hover { background-color: var(--bg-elevated); color: var(--text-primary); }
+
+.btn-danger {
+  background-color: var(--accent-red);
+  color: var(--text-primary);
+  padding: 0.5rem 1.25rem;
+  border-radius: 6px;
+  font-weight: 600;
+  transition: background-color 0.15s;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.btn-danger:hover { background-color: var(--accent-red-hover); }
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(1rem); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Card */
+.card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem;
+}
+
+/* Badge */
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Table */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.data-table th {
+  background-color: var(--bg-elevated);
+  color: var(--text-secondary);
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.data-table td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+.data-table tr:hover td {
+  background-color: var(--bg-elevated);
+}
+.data-table tr:last-child td { border-bottom: none; }
