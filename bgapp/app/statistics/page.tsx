@@ -5,7 +5,7 @@ import Charts from "./Charts";
 export const dynamic = "force-dynamic";
 
 export default async function StatisticsPage() {
-  const [allGames, wishlistCount, sleeveUsageRaw] = await Promise.all([
+  const [allGames, wishlistCount, sleeveUsageRaw, firstPlay] = await Promise.all([
     prisma.game.findMany(),
     prisma.wishlistGame.count(),
     prisma.gameSleeve.groupBy({
@@ -15,6 +15,7 @@ export default async function StatisticsPage() {
       orderBy: { _sum: { qty: "desc" } },
       take: 10,
     }),
+    prisma.play.aggregate({ _min: { date: true } }),
   ]);
 
   const inCollection = allGames.filter((g) => g.status === "InCollezione");
@@ -34,13 +35,16 @@ export default async function StatisticsPage() {
     ? gamesWithRating.reduce((s, g) => s + (g.bggRating ?? 0), 0) / gamesWithRating.length
     : null;
 
-  // Deriva l'inizio collezione dal primo acquisto reale, non da una data fissa,
-  // altrimenti la spesa giornaliera risulta gonfiata (denominatore troppo piccolo).
-  const purchaseTimes     = allGames
-    .map((g) => g.purchaseDate)
+  // Spesa media giornaliera = totale speso / giorni di attività.
+  // purchaseDate è quasi sempre vuota, quindi come inizio uso la data più antica
+  // tra il primo acquisto registrato e la prima partita giocata (segnale di attività reale).
+  const startCandidates   = [
+    ...allGames.map((g) => g.purchaseDate),
+    firstPlay._min.date,
+  ]
     .filter((d): d is Date => d != null)
     .map((d) => new Date(d).getTime());
-  const collectionStart   = purchaseTimes.length > 0 ? new Date(Math.min(...purchaseTimes)) : new Date();
+  const collectionStart   = startCandidates.length > 0 ? new Date(Math.min(...startCandidates)) : new Date();
   const daysOwned         = Math.max(1, Math.floor((Date.now() - collectionStart.getTime()) / 86_400_000));
   const dailySpend        = totalInvested / daysOwned;
 
