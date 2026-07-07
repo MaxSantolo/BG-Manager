@@ -19,7 +19,7 @@ function formatDate(date: Date): string {
 }
 
 export default async function PlaysPage() {
-  const [rawPlays, topGames, settings, collectionGamesForLog] = await Promise.all([
+  const [rawPlays, statPlays, topGames, settings, collectionGamesForLog] = await Promise.all([
     prisma.play.findMany({
       orderBy: { date: "desc" },
       take: 100,
@@ -28,6 +28,10 @@ export default async function PlaysPage() {
         gameName: true, bggGameId: true, gameId: true,
         players: true, location: true, notes: true, incomplete: true,
       },
+    }),
+    // All plays (lightweight) — stats must cover the whole history, not just the last 100
+    prisma.play.findMany({
+      select: { quantity: true, duration: true, bggGameId: true, gameName: true },
     }),
     prisma.play.groupBy({
       by: ["gameName", "bggGameId", "gameId"],
@@ -43,12 +47,12 @@ export default async function PlaysPage() {
     }),
   ]);
 
-  // Stats
-  const totalSessions = rawPlays.reduce((s, p) => s + p.quantity, 0);
-  const totalMinutes  = rawPlays
+  // Stats — computed over the entire play history
+  const totalSessions = statPlays.reduce((s, p) => s + p.quantity, 0);
+  const totalMinutes  = statPlays
     .filter(p => p.duration)
     .reduce((s, p) => s + (p.duration ?? 0) * p.quantity, 0);
-  const uniqueGames   = new Set(rawPlays.map(p => p.bggGameId ?? p.gameName)).size;
+  const uniqueGames   = new Set(statPlays.map(p => p.bggGameId ?? p.gameName)).size;
 
   // Index collection games by bggId for links
   const collectionGames = await prisma.game.findMany({

@@ -95,13 +95,36 @@ export async function POST(req: NextRequest) {
 
   const bggGames = parseCollectionXml(xml);
 
-  // Find existing games by bggId to avoid duplicates
-  const existing = await prisma.game.findMany({ select: { bggId: true }, where: { bggId: { not: null } } });
-  const existingBggIds = new Set(existing.map(g => g.bggId!));
+  // Load existing games by bggId so we can fill in missing fields without overwriting
+  const existing = await prisma.game.findMany({
+    where: { bggId: { in: bggGames.map(g => g.bggId) } },
+    select: {
+      id: true, bggId: true,
+      thumbnail: true, image: true, bggRating: true,
+      minPlayers: true, maxPlayers: true, playTime: true, yearPublished: true,
+    },
+  });
+  const existingByBgg = new Map(existing.map(g => [g.bggId!, g]));
 
-  let imported = 0, skipped = 0;
+  let imported = 0, enriched = 0;
   for (const g of bggGames) {
-    if (existingBggIds.has(g.bggId)) { skipped++; continue; }
+    const local = existingByBgg.get(g.bggId);
+    if (local) {
+      // Fill only locally-missing fields; never touch name/type/status/cost/etc.
+      const patch: Record<string, unknown> = {};
+      if (local.thumbnail == null && g.thumbnail != null) patch.thumbnail = g.thumbnail;
+      if (local.image == null && g.image != null) patch.image = g.image;
+      if (local.bggRating == null && g.bggRating != null) patch.bggRating = g.bggRating;
+      if (local.minPlayers == null && g.minPlayers != null) patch.minPlayers = g.minPlayers;
+      if (local.maxPlayers == null && g.maxPlayers != null) patch.maxPlayers = g.maxPlayers;
+      if (local.playTime == null && g.playTime != null) patch.playTime = g.playTime;
+      if (local.yearPublished == null && g.yearPublished != null) patch.yearPublished = g.yearPublished;
+      if (Object.keys(patch).length > 0) {
+        await prisma.game.update({ where: { id: local.id }, data: patch });
+        enriched++;
+      }
+      continue;
+    }
     await prisma.game.create({
       data: {
         bggId:        g.bggId,
@@ -122,5 +145,5 @@ export async function POST(req: NextRequest) {
     imported++;
   }
 
-  return NextResponse.json({ imported, skipped, total: bggGames.length });
+  return NextResponse.json({ imported, enriched, total: bggGames.length });
 }

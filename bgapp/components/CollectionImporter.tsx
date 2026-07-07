@@ -36,10 +36,9 @@ export default function CollectionImporter({ initialUsername, initialPassword }:
       return;
     }
     setStatus("done");
-    setMessage(
-      `${data.imported} giochi importati` +
-      (data.skipped > 0 ? `, ${data.skipped} già presenti.` : ".")
-    );
+    const parts = [`${data.imported} nuovi giochi importati`];
+    if (data.enriched > 0) parts.push(`${data.enriched} aggiornati con dati mancanti`);
+    setMessage(parts.join(", ") + ".");
   }
 
   function startClick() {
@@ -78,7 +77,7 @@ export default function CollectionImporter({ initialUsername, initialPassword }:
 
             <div className="p-4 space-y-3">
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Importa tutti i giochi marcati come &quot;Owned&quot; sul tuo profilo BGG. I giochi già presenti vengono saltati.
+                Importa tutti i giochi marcati come &quot;Owned&quot; sul tuo profilo BGG. I giochi già presenti vengono solo arricchiti dei dati mancanti, senza sovrascrivere nulla.
               </p>
 
               {!hasSaved && (

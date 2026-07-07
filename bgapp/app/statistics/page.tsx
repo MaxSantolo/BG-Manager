@@ -34,9 +34,15 @@ export default async function StatisticsPage() {
     ? gamesWithRating.reduce((s, g) => s + (g.bggRating ?? 0), 0) / gamesWithRating.length
     : null;
 
-  const collectionStart   = new Date("2024-09-01");
-  const daysOwned         = Math.floor((Date.now() - collectionStart.getTime()) / 86_400_000);
-  const dailySpend        = daysOwned > 0 ? totalInvested / daysOwned : 0;
+  // Deriva l'inizio collezione dal primo acquisto reale, non da una data fissa,
+  // altrimenti la spesa giornaliera risulta gonfiata (denominatore troppo piccolo).
+  const purchaseTimes     = allGames
+    .map((g) => g.purchaseDate)
+    .filter((d): d is Date => d != null)
+    .map((d) => new Date(d).getTime());
+  const collectionStart   = purchaseTimes.length > 0 ? new Date(Math.min(...purchaseTimes)) : new Date();
+  const daysOwned         = Math.max(1, Math.floor((Date.now() - collectionStart.getTime()) / 86_400_000));
+  const dailySpend        = totalInvested / daysOwned;
 
   const typeBreakdown = allGames.reduce(
     (acc, g) => { acc[g.type] = (acc[g.type] ?? 0) + 1; return acc; },
@@ -93,6 +99,7 @@ export default async function StatisticsPage() {
           avgRating:        avgRating != null ? round2(avgRating) : null,
           dailySpend:       round2(dailySpend),
           daysOwned,
+          startDate:        collectionStart.toLocaleDateString("it-IT"),
         }}
       />
 

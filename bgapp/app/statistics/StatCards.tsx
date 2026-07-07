@@ -16,6 +16,7 @@ interface Props {
     avgRating: number | null;
     dailySpend: number;
     daysOwned: number;
+    startDate: string;
   };
 }
 
@@ -86,7 +87,7 @@ export default function StatCards({ totals, finances }: Props) {
         <StatCard
           label="Spesa media giornaliera"
           value={`€${finances.dailySpend.toFixed(2)}`}
-          sub={`Dal 01/09/2024 · ${finances.daysOwned} giorni`}
+          sub={`Dal ${finances.startDate} · ${finances.daysOwned} giorni`}
         />
       </div>
     </div>
