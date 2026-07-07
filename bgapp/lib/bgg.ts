@@ -23,7 +23,7 @@ export interface BggGameDetail {
 }
 
 const BGG_BASE = "https://boardgamegeek.com/xmlapi2";
-const BGG_TOKEN = process.env.BGG_API_TOKEN ?? "7a5e3d1c-353b-4afc-a49f-eec8173b92bd";
+const BGG_TOKEN = process.env.BGG_API_KEY ?? "7a5e3d1c-353b-4afc-a49f-eec8173b92bd";
 const bggHeaders = { Authorization: `Bearer ${BGG_TOKEN}` };
 
 // ── Search ────────────────────────────────────────────────────────────────────
