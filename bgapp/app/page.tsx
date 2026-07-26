@@ -6,13 +6,21 @@ import RandomPicker from "@/components/RandomPicker";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * The dashboard is about what's on the shelf now: games already sold, and
+ * guest games that were only ever played elsewhere, are history rather than
+ * collection and stay out of both the count and the recent list.
+ */
+const ON_THE_SHELF = { status: { notIn: ["Venduto", "GiocatoEsterno"] } };
+
 export default async function Home() {
   const [totalGames, wishlistCount, activeLoans, recentGames, forSaleGames, aggregate] =
     await Promise.all([
-      prisma.game.count(),
+      prisma.game.count({ where: ON_THE_SHELF }),
       prisma.wishlistGame.count(),
       prisma.loan.count({ where: { returned: false } }),
       prisma.game.findMany({
+        where: ON_THE_SHELF,
         orderBy: { createdAt: "desc" },
         take: 6,
         select: { id: true, name: true, thumbnail: true, status: true },

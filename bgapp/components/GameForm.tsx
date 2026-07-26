@@ -32,6 +32,13 @@ function parseDesigners(val: unknown): string[] {
   try { return JSON.parse(String(val ?? "[]")); } catch { return []; }
 }
 
+const Label = ({ children }: { children: React.ReactNode }) => (
+  <label className="block text-xs font-semibold mb-1 uppercase tracking-wide"
+    style={{ color: "var(--text-secondary)" }}>
+    {children}
+  </label>
+);
+
 export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
   const router = useRouter();
   const { show } = useToast();
@@ -208,7 +215,15 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
       return;
     }
 
-    show(id ? "Modifiche salvate" : "Gioco aggiunto");
+    // Saved locally either way; only the BGG status push can fail on its own.
+    const saved = await res.json().catch(() => ({}));
+    if (saved?.bgg?.error) {
+      show(`Salvato, ma non su BGG: ${saved.bgg.error}`, "error");
+    } else if (saved?.bgg?.pending) {
+      show(`${id ? "Modifiche salvate" : "Gioco aggiunto"}. Sincronizzazione BGG in corso.`);
+    } else {
+      show(id ? "Modifiche salvate" : "Gioco aggiunto");
+    }
 
     setSaving(false);
     router.push(backUrl);
@@ -216,7 +231,7 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
   }
 
   async function handleDelete() {
-    if (!id || !confirm("Eliminare definitivamente questo gioco?")) return;
+    if (!id || !confirm("Eliminare definitivamente questo gioco? Verrà rimosso anche dalla collezione BGG.")) return;
     const base = isWishlist ? "/api/wishlist" : "/api/games";
     const res = await fetch(`${base}/${id}`, { method: "DELETE" });
     if (res.ok) {
@@ -224,16 +239,12 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
       router.push(backUrl);
       router.refresh();
     } else {
-      show("Errore durante l'eliminazione", "error");
+      // A 409 means BGG still has it: deleting only here would let the next
+      // sync bring it straight back, so say why instead of failing vaguely.
+      const data = await res.json().catch(() => ({}));
+      show([data.error, data.hint].filter(Boolean).join(" ") || "Errore durante l'eliminazione", "error");
     }
   }
-
-  const Label = ({ children }: { children: React.ReactNode }) => (
-    <label className="block text-xs font-semibold mb-1 uppercase tracking-wide"
-      style={{ color: "var(--text-secondary)" }}>
-      {children}
-    </label>
-  );
 
   const hasBggInfo = !!(thumbnail || image || bggRating || designers.length || description);
 
@@ -287,7 +298,12 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
           onSelect={applyBggData}
           selectedName={bggSelected && name ? name : undefined}
           onClear={clearBgg}
+          onUseAsName={(n) => { setName(n); setBggId(null); setBggSelected(false); }}
         />
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+          Il gioco non è su BGG? Cercalo e scegli &laquo;usa come nome&raquo;, oppure scrivi
+          direttamente il nome nel campo qui sotto: il collegamento a BGG è facoltativo.
+        </p>
 
         {/* No data yet for a linked game — show a fetch button (new games only) */}
         {!id && !hasBggInfo && bggId && (

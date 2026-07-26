@@ -74,7 +74,7 @@ export default function RandomPicker() {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        <div className="modal-shell fixed inset-0 z-50 flex items-center justify-center"
           style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
           onClick={(e) => e.target === e.currentTarget && close()}>
           <div className="w-full max-w-md rounded-xl shadow-2xl"

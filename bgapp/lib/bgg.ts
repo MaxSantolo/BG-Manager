@@ -24,7 +24,7 @@ export interface BggGameDetail {
 
 const BGG_BASE = "https://boardgamegeek.com/xmlapi2";
 const BGG_TOKEN = process.env.BGG_API_KEY ?? "7a5e3d1c-353b-4afc-a49f-eec8173b92bd";
-const bggHeaders = { Authorization: `Bearer ${BGG_TOKEN}` };
+export const bggHeaders = { Authorization: `Bearer ${BGG_TOKEN}` };
 
 // ── Search ────────────────────────────────────────────────────────────────────
 
@@ -111,6 +111,42 @@ export async function getBggGame(id: number): Promise<BggGameDetail | null> {
     categories,
     mechanics,
   };
+}
+
+// ── Users ─────────────────────────────────────────────────────────────────────
+
+export interface BggUserInfo {
+  exists: boolean;
+  id: number | null;
+  avatarUrl: string | null;
+  fullName: string | null;
+}
+
+/**
+ * Looks up a BGG account. Users without a picture report avatarlink="N/A",
+ * and an unknown username comes back with an empty name attribute.
+ */
+export async function getBggUser(username: string): Promise<BggUserInfo> {
+  const res = await fetch(`${BGG_BASE}/user?name=${encodeURIComponent(username)}`, {
+    headers: bggHeaders,
+    next: { revalidate: 86400 },
+  });
+  if (!res.ok) return { exists: false, id: null, avatarUrl: null, fullName: null };
+
+  const xml = await res.text();
+  const id = xml.match(/<user\s[^>]*\bid="(\d+)"/)?.[1];
+  if (!id || id === "0") return { exists: false, id: null, avatarUrl: null, fullName: null };
+
+  const rawAvatar = xml.match(/<avatarlink\s+value="([^"]*)"/)?.[1] ?? "";
+  const avatarUrl = !rawAvatar || rawAvatar === "N/A"
+    ? null
+    : rawAvatar.startsWith("//") ? `https:${rawAvatar}` : rawAvatar;
+
+  const first = decodeXmlEntities(xml.match(/<firstname\s+value="([^"]*)"/)?.[1] ?? "");
+  const last  = decodeXmlEntities(xml.match(/<lastname\s+value="([^"]*)"/)?.[1] ?? "");
+  const fullName = [first, last].filter(Boolean).join(" ") || null;
+
+  return { exists: true, id: Number(id), avatarUrl, fullName };
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import PlaysImporter from "@/components/PlaysImporter";
 import LogPlayModal from "@/components/LogPlayModal";
 import EditPlayModal from "@/components/EditPlayModal";
 import Link from "next/link";
+import { FileImage } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +76,9 @@ export default async function PlaysPage() {
             games={collectionGamesForLog}
             bggUsername={settings?.bggUsername ?? ""}
           />
+          <Link href="/report" className="btn-secondary text-sm flex items-center gap-2">
+            <FileImage size={14} /> Report
+          </Link>
           <PlaysImporter
             initialUsername={settings?.bggUsername ?? ""}
             initialPassword={settings?.bggPassword ?? ""}
@@ -150,7 +154,7 @@ export default async function PlaysPage() {
           </h2>
           {rawPlays.length === 0 ? (
             <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-              Nessuna partita importata. Usa il pulsante "Importa da BGG" in alto.
+              Nessuna partita importata. Usa il pulsante &quot;Importa da BGG&quot; in alto.
             </p>
           ) : (
             <div className="divide-y overflow-x-auto" style={{ borderColor: "var(--border)" }}>

@@ -10,6 +10,8 @@ generator client {
 model Game {
   id            Int       @id @default(autoincrement())
   bggId         Int?
+  /// BGG's collection-entry id; the handle needed to write status back.
+  bggCollId     Int?
   name          String
   type          String    @default("Base")
   cost          Float?
@@ -120,8 +122,37 @@ model Play {
   createdAt  DateTime @default(now())
 }
 
+/// Registry of people you play with, so plays can be logged by picking a name
+/// instead of retyping it. Play.players stays the BGG-authoritative record;
+/// this table only backs the picker and the avatars.
+model Player {
+  id             Int       @id @default(autoincrement())
+  name           String    @unique
+  bggUsername    String?
+  avatarUrl      String?
+  avatarCheckedAt DateTime?
+  playCount      Int       @default(0)
+  /// Other spellings this person appears under in play history. Merging folds
+  /// a duplicate's name in here so the rebuild can't recreate it from BGG.
+  aliases        String    @default("[]")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+/// Places you play at. Like Player, this only backs the picker — Play.location
+/// stays the plain string BGG round-trips.
+model Place {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  playCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Settings {
-  id          Int     @id @default(autoincrement())
-  bggUsername String?
-  bggPassword String?
+  id              Int       @id @default(autoincrement())
+  bggUsername     String?
+  bggPassword     String?
+  autoSyncOnStart Boolean   @default(true)
+  lastSyncAt      DateTime?
 }

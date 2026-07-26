@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { savePlayToBgg, withBggTimeout, BggWriteError, BggTimeoutError } from "@/lib/bggWrite";
+import { toBggDate, toBggPlayers } from "@/lib/playPayload";
+import { registerPlace } from "@/lib/registry";
+
+export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -26,6 +31,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { bggPlayId, date, quantity, duration, location, notes, incomplete, gameName, bggGameId, gameId, players } = body;
 
+  // Local write first: a BGG outage must never lose what was just typed.
   const play = await prisma.play.create({
     data: {
       bggPlayId:  bggPlayId ?? null,
@@ -42,5 +48,32 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return NextResponse.json(play, { status: 201 });
+  // A location typed here becomes a reusable place next time.
+  await registerPlace(location);
+
+  // Push to BGG and adopt the id it assigns, so the next sync recognises this
+  // play as already-known instead of importing a duplicate.
+  if (!bggGameId || bggPlayId) return NextResponse.json({ ...play, bgg: { pushed: false } }, { status: 201 });
+
+  try {
+    const newBggPlayId = await withBggTimeout(savePlayToBgg({
+      bggGameId,
+      date: toBggDate(date),
+      quantity, duration, location, notes, incomplete,
+      players: toBggPlayers(players),
+    }));
+    const updated = await prisma.play.update({
+      where: { id: play.id },
+      data:  { bggPlayId: newBggPlayId },
+    });
+    return NextResponse.json({ ...updated, bgg: { pushed: true } }, { status: 201 });
+  } catch (err) {
+    // The play is already saved locally; a slow/failed BGG push is reconciled
+    // by the next sync, so this never blocks the user.
+    const pending = err instanceof BggTimeoutError;
+    return NextResponse.json(
+      { ...play, bgg: { pushed: false, pending, error: pending ? undefined : (err instanceof BggWriteError ? err.message : "Errore BGG") } },
+      { status: 201 }
+    );
+  }
 }

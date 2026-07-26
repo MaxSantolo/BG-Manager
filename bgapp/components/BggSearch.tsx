@@ -1,16 +1,18 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Search, Loader2, ExternalLink, X, AlertCircle } from "lucide-react";
+import { Search, Loader2, ExternalLink, X, AlertCircle, PenLine } from "lucide-react";
 import type { BggSearchResult, BggGameDetail } from "@/lib/bgg";
 
 interface Props {
   onSelect: (game: BggGameDetail) => void;
   selectedName?: string;
   onClear?: () => void;
+  /** Lets the caller adopt the typed text as a plain name, with no BGG link. */
+  onUseAsName?: (name: string) => void;
 }
 
-export default function BggSearch({ onSelect, selectedName, onClear }: Props) {
+export default function BggSearch({ onSelect, selectedName, onClear, onUseAsName }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<BggSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -35,6 +37,15 @@ export default function BggSearch({ onSelect, selectedName, onClear }: Props) {
     } finally {
       setLoading(false);
     }
+  }
+
+  function useTypedName() {
+    const n = query.trim();
+    if (!n || !onUseAsName) return;
+    onUseAsName(n);
+    setQuery("");
+    setResults([]);
+    setOpen(false);
   }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -153,19 +164,33 @@ export default function BggSearch({ onSelect, selectedName, onClear }: Props) {
               )}
             </button>
           ))}
+
+          {/* The right game isn't always in the list — keep the free-text way out. */}
+          {onUseAsName && query.trim() && (
+            <button type="button" onClick={useTypedName}
+              className="w-full text-left px-3 py-2.5 flex items-center gap-2 text-sm transition-colors"
+              style={{ color: "var(--accent-blue-light)" }}>
+              <PenLine size={13} className="flex-shrink-0" />
+              Nessuno di questi — usa &laquo;{query.trim()}&raquo; come nome
+            </button>
+          )}
         </div>
       )}
 
       {open && results.length === 0 && !loading && (
         <div
-          className="absolute z-50 mt-1 w-full rounded-lg px-3 py-3 text-sm"
-          style={{
-            backgroundColor: "var(--bg-elevated)",
-            border: "1px solid var(--border-light)",
-            color: "var(--text-muted)",
-          }}
+          className="absolute z-50 mt-1 w-full rounded-lg shadow-xl p-3 space-y-2"
+          style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-light)" }}
         >
-          Nessun risultato trovato su BGG
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+            Nessun risultato trovato su BGG
+          </p>
+          {onUseAsName && query.trim() && (
+            <button type="button" onClick={useTypedName}
+              className="btn-secondary w-full text-sm flex items-center justify-center gap-2">
+              <PenLine size={13} /> Usa &laquo;{query.trim()}&raquo; come nome
+            </button>
+          )}
         </div>
       )}
     </div>

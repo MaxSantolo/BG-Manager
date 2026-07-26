@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getBggGame } from "@/lib/bgg";
+import { ensureCollectionItemOnBgg, withBggTimeout, BggWriteError, BggTimeoutError } from "@/lib/bggWrite";
+
+export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -88,7 +91,7 @@ export async function POST(request: NextRequest) {
 
   // Gestione associazione bustine (GameSleeve)
   if (Array.isArray(body.sleeves)) {
-    const sleevesToCreate = body.sleeves.map((s: any) => ({
+    const sleevesToCreate = (body.sleeves as { sleeveId: number; qty?: number }[]).map(s => ({
       gameId: game.id,
       sleeveId: s.sleeveId,
       qty: s.qty ?? 1,
@@ -108,5 +111,23 @@ export async function POST(request: NextRequest) {
     include: { gameSleeves: { include: { sleeve: true } } },
   });
 
-  return NextResponse.json(gameWithSleeves, { status: 201 });
+  // Put it in the BGG collection too, and keep the id we get back so later
+  // status changes can be pushed without another lookup.
+  let bgg: { pushed: boolean; pending?: boolean; error?: string } = { pushed: false };
+  if (game.bggId) {
+    try {
+      const collId = await withBggTimeout(ensureCollectionItemOnBgg(game.bggId, game.status));
+      if (collId) {
+        await prisma.game.update({ where: { id: game.id }, data: { bggCollId: collId } });
+        if (gameWithSleeves) gameWithSleeves.bggCollId = collId;   // keep the reply current
+        bgg = { pushed: true };
+      }
+    } catch (err) {
+      // Game is already saved locally; a slow BGG push is reconciled by sync.
+      const pending = err instanceof BggTimeoutError;
+      bgg = { pushed: false, pending, error: pending ? undefined : (err instanceof BggWriteError ? err.message : "Errore BGG") };
+    }
+  }
+
+  return NextResponse.json({ ...gameWithSleeves, bgg }, { status: 201 });
 }

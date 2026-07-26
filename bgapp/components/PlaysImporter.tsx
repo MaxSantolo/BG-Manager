@@ -12,7 +12,7 @@ interface Props {
 type Status = "idle" | "loading" | "done" | "error";
 
 export default function PlaysImporter({ initialUsername, initialPassword }: Props) {
-  const hasSaved = !!(initialUsername?.trim() && initialPassword?.trim());
+  const hasSaved = !!initialUsername?.trim();
 
   const [open, setOpen]         = useState(false);
   const [username, setUsername] = useState(initialUsername ?? "");
@@ -58,7 +58,7 @@ export default function PlaysImporter({ initialUsername, initialPassword }: Prop
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        <div className="modal-shell fixed inset-0 z-50 flex items-center justify-center"
           style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
           onClick={(e) => e.target === e.currentTarget && close()}>
           <div className="w-full max-w-sm rounded-xl shadow-2xl"
@@ -95,7 +95,7 @@ export default function PlaysImporter({ initialUsername, initialPassword }: Prop
                         placeholder="••••••••"
                         className="w-full pr-9"
                         disabled={status === "loading"}
-                        onKeyDown={e => e.key === "Enter" && runImport(username, password)}
+                        onKeyDown={e => e.key === "Enter" && username.trim() && runImport(username, password)}
                       />
                       <button type="button" onClick={() => setShowPw(v => !v)}
                         className="absolute right-2.5 top-1/2 -translate-y-1/2 btn-ghost p-0.5">
@@ -138,7 +138,7 @@ export default function PlaysImporter({ initialUsername, initialPassword }: Prop
               ) : (
                 <>
                   <button onClick={() => runImport(username, password)}
-                    disabled={status === "loading" || !username.trim() || !password.trim()}
+                    disabled={status === "loading" || !username.trim()}
                     className="btn-primary flex-1 flex items-center justify-center gap-2">
                     {status === "loading"
                       ? <><Loader2 size={14} className="animate-spin" /> In corso…</>

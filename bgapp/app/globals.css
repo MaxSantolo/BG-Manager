@@ -45,6 +45,30 @@ body {
   color: var(--text-primary);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   min-height: 100vh;
+  /* Landscape notch: keep content clear of the rounded corners. */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/*
+ * iOS home-screen app: the status bar is black-translucent, so the page draws
+ * under the Dynamic Island and the home indicator. These pull the chrome back
+ * inside the safe area. On every other device the insets are 0 and nothing
+ * changes.
+ */
+.safe-top    { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+/* Floating UI has to clear the home indicator, not just the viewport edge. */
+.safe-fixed-bottom { bottom: calc(1.5rem + env(safe-area-inset-bottom)); }
+
+/* Overlays cover the whole screen, insets included — pad so a tall dialog
+   never tucks its header under the Dynamic Island. */
+.modal-shell {
+  padding-top:    calc(1rem + env(safe-area-inset-top));
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  padding-left:   calc(1rem + env(safe-area-inset-left));
+  padding-right:  calc(1rem + env(safe-area-inset-right));
 }
 
 /* Scrollbar */

@@ -1,5 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import {
+  ensureCollectionItemOnBgg,
+  updateCollectionStatusOnBgg,
+  clearCollectionStatusOnBgg,
+  bggFlagsForStatus,
+  withBggTimeout,
+  BggWriteError,
+  BggTimeoutError,
+} from "@/lib/bggWrite";
+
+export const maxDuration = 60;
 
 export async function GET(
   _req: NextRequest,
@@ -60,6 +71,16 @@ export async function PUT(
     }
   }
 
+  const before = await prisma.game.findUnique({
+    where: { id: parseInt(id) },
+    select: { status: true, bggCollId: true, bggId: true },
+  });
+
+  // Relinking to a different BGG game invalidates the stored collection id —
+  // keeping it would push this game's edits onto the previous game's entry.
+  const newBggId = body.bggId != null ? parseInt(body.bggId) : null;
+  const relinked = before != null && newBggId !== before.bggId;
+
   // Aggiorna il gioco senza sleeveData
   const game = await prisma.game.update({
     where: { id: parseInt(id) },
@@ -70,6 +91,7 @@ export async function PUT(
       cost:         body.cost != null    ? parseFloat(body.cost) : null,
       salePrice:    body.salePrice != null ? parseFloat(body.salePrice) : null,
       status:       body.status,
+      ...(relinked ? { bggCollId: null } : {}),
       insert:       body.insert,
       sleeves:      undefined, // legacy
       sleeveData:   undefined, // legacy
@@ -95,7 +117,7 @@ export async function PUT(
     // Cancella tutte le associazioni precedenti
     await prisma.gameSleeve.deleteMany({ where: { gameId: game.id } });
     // Inserisci le nuove
-    const sleevesToCreate = body.sleeves.map((s: any) => ({
+    const sleevesToCreate = (body.sleeves as { sleeveId: number; qty?: number }[]).map(s => ({
       gameId: game.id,
       sleeveId: s.sleeveId,
       qty: s.qty ?? 1,
@@ -111,7 +133,31 @@ export async function PUT(
     include: { gameSleeves: { include: { sleeve: true } } },
   });
 
-  return NextResponse.json(gameWithSleeves);
+  // BGG is authoritative for status, so a local change has to reach it —
+  // otherwise the next sync would simply undo what was just saved here.
+  let bgg: { pushed: boolean; pending?: boolean; error?: string } = { pushed: false };
+  const statusChanged = before && before.status !== game.status;
+  if (game.bggId && bggFlagsForStatus(game.status)) {
+    try {
+      if (!game.bggCollId) {
+        // Never made it to BGG (added before this existed, or the push failed).
+        const collId = await withBggTimeout(ensureCollectionItemOnBgg(game.bggId, game.status));
+        if (collId) {
+          await prisma.game.update({ where: { id: game.id }, data: { bggCollId: collId } });
+          bgg = { pushed: true };
+        }
+      } else if (statusChanged) {
+        await withBggTimeout(updateCollectionStatusOnBgg(game.bggCollId, game.status));
+        bgg = { pushed: true };
+      }
+    } catch (err) {
+      // Local update already committed; a slow BGG push is reconciled by sync.
+      const pending = err instanceof BggTimeoutError;
+      bgg = { pushed: false, pending, error: pending ? undefined : (err instanceof BggWriteError ? err.message : "Errore BGG") };
+    }
+  }
+
+  return NextResponse.json({ ...gameWithSleeves, bgg });
 }
 
 export async function DELETE(
@@ -120,7 +166,30 @@ export async function DELETE(
 ) {
   const { id } = await params;
   const gameId = parseInt(id);
+
+  const game = await prisma.game.findUnique({
+    where: { id: gameId },
+    select: { bggCollId: true },
+  });
+  if (!game) return NextResponse.json({ error: "Gioco non trovato" }, { status: 404 });
+
+  // Clear it on BGG first. Deleting only here would let the next sync import
+  // it straight back, which reads as the delete silently failing.
+  if (game.bggCollId) {
+    try {
+      await clearCollectionStatusOnBgg(game.bggCollId);
+    } catch (err) {
+      return NextResponse.json(
+        {
+          error: err instanceof BggWriteError ? err.message : "Errore BGG",
+          hint:  "Il gioco è ancora nella collezione BGG: eliminandolo solo qui verrebbe re-importato alla prossima sincronizzazione.",
+        },
+        { status: 409 }
+      );
+    }
+  }
+
   await prisma.gameSleeve.deleteMany({ where: { gameId } });
   await prisma.game.delete({ where: { id: gameId } });
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, bgg: { cleared: !!game.bggCollId } });
 }

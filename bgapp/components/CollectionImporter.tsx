@@ -12,7 +12,7 @@ interface Props {
 type Status = "idle" | "loading" | "done" | "error";
 
 export default function CollectionImporter({ initialUsername, initialPassword }: Props) {
-  const hasSaved = !!(initialUsername?.trim() && initialPassword?.trim());
+  const hasSaved = !!initialUsername?.trim();
 
   const [open, setOpen]         = useState(false);
   const [username, setUsername] = useState(initialUsername ?? "");
@@ -37,6 +37,8 @@ export default function CollectionImporter({ initialUsername, initialPassword }:
     }
     setStatus("done");
     const parts = [`${data.imported} nuovi giochi importati`];
+    if (data.statusChanged > 0) parts.push(`${data.statusChanged} stati aggiornati`);
+    if (data.wishlistImported > 0) parts.push(`${data.wishlistImported} aggiunti ai desiderata`);
     if (data.enriched > 0) parts.push(`${data.enriched} aggiornati con dati mancanti`);
     setMessage(parts.join(", ") + ".");
   }
@@ -60,7 +62,7 @@ export default function CollectionImporter({ initialUsername, initialPassword }:
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        <div className="modal-shell fixed inset-0 z-50 flex items-center justify-center"
           style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
           onClick={(e) => e.target === e.currentTarget && close()}>
           <div className="w-full max-w-sm rounded-xl shadow-2xl"
@@ -77,7 +79,9 @@ export default function CollectionImporter({ initialUsername, initialPassword }:
 
             <div className="p-4 space-y-3">
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Importa tutti i giochi marcati come &quot;Owned&quot; sul tuo profilo BGG. I giochi già presenti vengono solo arricchiti dei dati mancanti, senza sovrascrivere nulla.
+                Importa i giochi marcati su BGG come Owned (In Collezione), For Trade (In Vendita)
+                o Previously Owned (Venduto). Lo stato viene allineato a BGG; gli altri dati locali
+                non vengono mai sovrascritti, solo completati se mancanti.
               </p>
 
               {!hasSaved && (
@@ -90,7 +94,7 @@ export default function CollectionImporter({ initialUsername, initialPassword }:
                       style={{ color: "var(--text-secondary)" }}>Username BGG</label>
                     <input type="text" value={username} onChange={e => setUsername(e.target.value)}
                       placeholder="es. MaxSantolo" className="w-full" disabled={status === "loading"}
-                      onKeyDown={e => e.key === "Enter" && runImport(username, password)} />
+                      onKeyDown={e => e.key === "Enter" && username.trim() && runImport(username, password)} />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold mb-1 uppercase tracking-wide"
@@ -100,7 +104,7 @@ export default function CollectionImporter({ initialUsername, initialPassword }:
                         onChange={e => setPassword(e.target.value)}
                         placeholder="••••••••" className="w-full pr-9"
                         disabled={status === "loading"}
-                        onKeyDown={e => e.key === "Enter" && runImport(username, password)} />
+                        onKeyDown={e => e.key === "Enter" && username.trim() && runImport(username, password)} />
                       <button type="button" onClick={() => setShowPw(v => !v)}
                         className="absolute right-2.5 top-1/2 -translate-y-1/2 btn-ghost p-0.5">
                         {showPw
@@ -141,7 +145,7 @@ export default function CollectionImporter({ initialUsername, initialPassword }:
               ) : (
                 <>
                   <button onClick={() => runImport(username, password)}
-                    disabled={status === "loading" || !username.trim() || !password.trim()}
+                    disabled={status === "loading" || !username.trim()}
                     className="btn-primary flex-1 flex items-center justify-center gap-2">
                     {status === "loading"
                       ? <><Loader2 size={14} className="animate-spin" /> In corso…</>

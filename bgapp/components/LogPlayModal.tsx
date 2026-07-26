@@ -1,20 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2, X, Loader2, CheckCircle, AlertCircle, Trophy, Search } from "lucide-react";
+import { Plus, X, Loader2, CheckCircle, AlertCircle, Trophy, Search } from "lucide-react";
 import type { BggGameDetail } from "@/lib/bgg";
+import PlayerPicker, { type PlayPlayer } from "./PlayerPicker";
+import PlacePicker from "./PlacePicker";
 
 interface Game {
   id: number;
   name: string;
   bggId: number | null;
   thumbnail: string | null;
-}
-
-interface Player {
-  name: string;
-  win: boolean;
-  score: string;
 }
 
 interface Props {
@@ -26,6 +22,11 @@ interface Props {
 function todayStr() {
   return new Date().toISOString().split("T")[0];
 }
+
+const Label = ({ children }: { children: React.ReactNode }) => (
+  <label className="block text-xs font-semibold mb-1 uppercase tracking-wide"
+    style={{ color: "var(--text-secondary)" }}>{children}</label>
+);
 
 export default function LogPlayModal({ games, bggUsername, preselectedGame }: Props) {
   const [open, setOpen] = useState(false);
@@ -42,7 +43,7 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
   const [location, setLocation]     = useState("");
   const [notes, setNotes]           = useState("");
   const [incomplete, setIncomplete] = useState(false);
-  const [players, setPlayers]       = useState<Player[]>([{ name: bggUsername ?? "", win: false, score: "" }]);
+  const [players, setPlayers]       = useState<PlayPlayer[]>([{ name: bggUsername ?? "", username: bggUsername ?? null, win: false, score: "" }]);
 
   const [saving, setSaving]     = useState(false);
   const [result, setResult]     = useState<{ ok: boolean; msg: string } | null>(null);
@@ -76,12 +77,6 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
     } finally {
       setBggSearching(false);
     }
-  }
-
-  function addPlayer()                      { setPlayers(p => [...p, { name: "", win: false, score: "" }]); }
-  function removePlayer(i: number)          { setPlayers(p => p.filter((_, idx) => idx !== i)); }
-  function updatePlayer(i: number, patch: Partial<Player>) {
-    setPlayers(p => p.map((pl, idx) => idx === i ? { ...pl, ...patch } : pl));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -131,9 +126,26 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
       }),
     });
 
+    const data = await res.json().catch(() => ({}));
     setSaving(false);
-    if (res.ok) setResult({ ok: true, msg: "Partita registrata." });
-    else setResult({ ok: false, msg: "Errore salvataggio." });
+
+    if (!res.ok) {
+      setResult({ ok: false, msg: "Errore salvataggio." });
+      return;
+    }
+    // The play is stored locally regardless; the BGG push can fail by itself.
+    if (data?.bgg?.error) {
+      setResult({ ok: false, msg: `Salvata in locale, ma non su BGG: ${data.bgg.error}` });
+      return;
+    }
+    setResult({
+      ok: true,
+      msg: data?.bgg?.pushed
+        ? "Partita registrata e caricata su BGG."
+        : data?.bgg?.pending
+          ? "Partita registrata. Sincronizzazione con BGG in corso."
+          : "Partita registrata.",
+    });
   }
 
   function close() {
@@ -150,13 +162,8 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
     setLocation("");
     setNotes("");
     setIncomplete(false);
-    setPlayers([{ name: bggUsername ?? "", win: false, score: "" }]);
+    setPlayers([{ name: bggUsername ?? "", username: bggUsername ?? null, win: false, score: "" }]);
   }
-
-  const Label = ({ children }: { children: React.ReactNode }) => (
-    <label className="block text-xs font-semibold mb-1 uppercase tracking-wide"
-      style={{ color: "var(--text-secondary)" }}>{children}</label>
-  );
 
   return (
     <>
@@ -165,7 +172,7 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
+        <div className="modal-shell fixed inset-0 z-50 flex items-center justify-center overflow-y-auto"
           style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
           onClick={(e) => e.target === e.currentTarget && close()}>
           <div className="w-full max-w-lg rounded-xl shadow-2xl my-4"
@@ -283,45 +290,11 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
                   </div>
                   <div>
                     <Label>Luogo</Label>
-                    <input type="text" value={location} onChange={e => setLocation(e.target.value)}
-                      className="w-full" placeholder="es. Casa" />
+                    <PlacePicker value={location} onChange={setLocation} />
                   </div>
                 </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <Label>Giocatori</Label>
-                    <button type="button" onClick={addPlayer}
-                      className="btn-ghost text-xs flex items-center gap-1"
-                      style={{ color: "var(--accent-blue-light)" }}>
-                      <Plus size={11} /> Aggiungi
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    {players.map((p, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <input type="text" placeholder="Nome" value={p.name}
-                          onChange={e => updatePlayer(i, { name: e.target.value })}
-                          className="flex-1 text-sm" />
-                        <input type="text" placeholder="Punti" value={p.score}
-                          onChange={e => updatePlayer(i, { score: e.target.value })}
-                          style={{ width: "68px" }} className="text-sm" />
-                        <button type="button" onClick={() => updatePlayer(i, { win: !p.win })}
-                          title="Vincitore"
-                          className="flex-shrink-0 p-1.5 rounded transition-colors"
-                          style={{
-                            backgroundColor: p.win ? "var(--accent-red)" : "transparent",
-                            border: "1px solid var(--border)",
-                          }}>
-                          🏆
-                        </button>
-                        <button type="button" onClick={() => removePlayer(i)} className="btn-ghost p-1.5 flex-shrink-0">
-                          <Trash2 size={13} style={{ color: "var(--text-muted)" }} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <PlayerPicker players={players} onChange={setPlayers} />
 
                 <div>
                   <Label>Note</Label>

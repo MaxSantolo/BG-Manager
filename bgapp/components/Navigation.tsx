@@ -7,6 +7,7 @@ import { useState } from "react";
 
 const links = [
   { href: "/collection", label: "Collezione", icon: Library },
+  { href: "/decide", label: "Cosa giochiamo", icon: Dice5 },
   { href: "/wishlist", label: "Desiderata", icon: Heart },
   { href: "/plays", label: "Partite", icon: Trophy },
   { href: "/sleeves", label: "Bustine", icon: BookOpen },
@@ -26,6 +27,7 @@ export default function Navigation() {
 
   return (
     <nav
+      className="safe-top"
       style={{
         backgroundColor: "var(--bg-card)",
         borderBottom: "1px solid var(--border)",

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Trash2, Plus, X, Save, Loader2 } from "lucide-react";
+import { Pencil, Trash2, X, Save, Loader2, AlertCircle } from "lucide-react";
+import PlayerPicker, { type PlayPlayer } from "./PlayerPicker";
+import PlacePicker from "./PlacePicker";
 
-interface Player { name: string; win: boolean; score: string; }
 
 interface Play {
   id: number;
@@ -25,6 +26,11 @@ function toDateInput(d: Date | string) {
   return new Date(d).toISOString().split("T")[0];
 }
 
+const Label = ({ children }: { children: React.ReactNode }) => (
+  <label className="block text-xs font-semibold mb-1 uppercase tracking-wide"
+    style={{ color: "var(--text-secondary)" }}>{children}</label>
+);
+
 export default function EditPlayModal({ play }: Props) {
   const [open, setOpen]           = useState(false);
   const [date, setDate]           = useState(toDateInput(play.date));
@@ -33,22 +39,18 @@ export default function EditPlayModal({ play }: Props) {
   const [location, setLocation]   = useState(play.location ?? "");
   const [notes, setNotes]         = useState(play.notes ?? "");
   const [incomplete, setIncomplete] = useState(play.incomplete);
-  const [players, setPlayers]     = useState<Player[]>(() => {
+  const [players, setPlayers]     = useState<PlayPlayer[]>(() => {
     try { return play.players ? JSON.parse(play.players) : []; } catch { return []; }
   });
   const [saving, setSaving]       = useState(false);
   const [deleting, setDeleting]   = useState(false);
-
-  function addPlayer()                              { setPlayers(p => [...p, { name: "", win: false, score: "" }]); }
-  function removePlayer(i: number)                  { setPlayers(p => p.filter((_, idx) => idx !== i)); }
-  function updatePlayer(i: number, patch: Partial<Player>) {
-    setPlayers(p => p.map((pl, idx) => idx === i ? { ...pl, ...patch } : pl));
-  }
+  const [error, setError]         = useState<string | null>(null);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await fetch(`/api/plays/${play.id}`, {
+    setError(null);
+    const res = await fetch(`/api/plays/${play.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -59,24 +61,33 @@ export default function EditPlayModal({ play }: Props) {
         players: players.filter(p => p.name.trim()),
       }),
     });
+    const data = await res.json().catch(() => ({}));
     setSaving(false);
+
+    // Saved locally either way; only the BGG leg can fail on its own.
+    if (data?.bgg?.error) {
+      setError(`Salvato in locale, ma non su BGG: ${data.bgg.error}`);
+      return;
+    }
     setOpen(false);
     window.location.reload();
   }
 
   async function handleDelete() {
-    if (!confirm("Eliminare questa partita?")) return;
+    if (!confirm("Eliminare questa partita? Verrà rimossa anche da BGG.")) return;
     setDeleting(true);
-    await fetch(`/api/plays/${play.id}`, { method: "DELETE" });
+    setError(null);
+    const res = await fetch(`/api/plays/${play.id}`, { method: "DELETE" });
     setDeleting(false);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError([data.error, data.hint].filter(Boolean).join(" ") || "Eliminazione non riuscita.");
+      return;
+    }
     setOpen(false);
     window.location.reload();
   }
-
-  const Label = ({ children }: { children: React.ReactNode }) => (
-    <label className="block text-xs font-semibold mb-1 uppercase tracking-wide"
-      style={{ color: "var(--text-secondary)" }}>{children}</label>
-  );
 
   return (
     <>
@@ -85,7 +96,7 @@ export default function EditPlayModal({ play }: Props) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
+        <div className="modal-shell fixed inset-0 z-50 flex items-center justify-center overflow-y-auto"
           style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
           onClick={(e) => e.target === e.currentTarget && setOpen(false)}>
           <div className="w-full max-w-lg rounded-xl shadow-2xl my-4"
@@ -122,40 +133,11 @@ export default function EditPlayModal({ play }: Props) {
                   </div>
                   <div>
                     <Label>Luogo</Label>
-                    <input type="text" value={location} onChange={e => setLocation(e.target.value)}
-                      className="w-full" placeholder="es. Casa" />
+                    <PlacePicker value={location} onChange={setLocation} />
                   </div>
                 </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <Label>Giocatori</Label>
-                    <button type="button" onClick={addPlayer}
-                      className="btn-ghost text-xs flex items-center gap-1"
-                      style={{ color: "var(--accent-blue-light)" }}>
-                      <Plus size={11} /> Aggiungi
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    {players.map((p, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <input type="text" placeholder="Nome" value={p.name}
-                          onChange={e => updatePlayer(i, { name: e.target.value })} className="flex-1 text-sm" />
-                        <input type="text" placeholder="Punti" value={p.score}
-                          onChange={e => updatePlayer(i, { score: e.target.value })}
-                          style={{ width: "68px" }} className="text-sm" />
-                        <button type="button" onClick={() => updatePlayer(i, { win: !p.win })}
-                          className="flex-shrink-0 p-1.5 rounded transition-colors"
-                          style={{ backgroundColor: p.win ? "var(--accent-red)" : "transparent", border: "1px solid var(--border)" }}>
-                          🏆
-                        </button>
-                        <button type="button" onClick={() => removePlayer(i)} className="btn-ghost p-1.5 flex-shrink-0">
-                          <Trash2 size={13} style={{ color: "var(--text-muted)" }} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <PlayerPicker players={players} onChange={setPlayers} />
 
                 <div>
                   <Label>Note</Label>
@@ -167,6 +149,13 @@ export default function EditPlayModal({ play }: Props) {
                   <input type="checkbox" checked={incomplete} onChange={e => setIncomplete(e.target.checked)} />
                   <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Partita incompleta</span>
                 </label>
+
+                {error && (
+                  <div className="flex items-start gap-2 text-sm p-3 rounded-lg"
+                    style={{ backgroundColor: "var(--bg-elevated)", color: "var(--accent-red-light)" }}>
+                    <AlertCircle size={15} className="flex-shrink-0 mt-0.5" /> {error}
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-2 p-4 border-t" style={{ borderColor: "var(--border)" }}>
