@@ -150,7 +150,10 @@ export default function PlayerPicker({ players, onChange }: Props) {
       {/* current line-up */}
       <div className="space-y-2">
         {players.map((p, i) => (
-          <div key={`${p.name}-${i}`} className="flex items-center gap-2">
+          // Key by position, not name: rows carry no local state (inputs are
+          // controlled by the parent array), and keying on the mutable name
+          // remounts the <input> on every keystroke, dropping focus on mobile.
+          <div key={i} className="flex items-center gap-2">
             <Avatar name={p.name} url={avatarFor(p)} />
             <input type="text" placeholder="Nome" value={p.name}
               onChange={e => update(i, { name: e.target.value })}

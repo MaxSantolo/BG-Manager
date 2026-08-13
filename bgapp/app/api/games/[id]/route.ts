@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { prismaTx } from "@/lib/prismaTx";
 import {
   ensureCollectionItemOnBgg,
   updateCollectionStatusOnBgg,
   clearCollectionStatusOnBgg,
-  bggFlagsForStatus,
+  statusMapsToBgg,
   withBggTimeout,
   BggWriteError,
   BggTimeoutError,
@@ -33,7 +34,9 @@ export async function PUT(
   const gameIdNum = parseInt(id);
   const body = await request.json();
 
-  // Sleeve magazine validation: compute deltas vs current GameSleeve and validate
+  // Sleeve magazine validation: compute deltas vs current GameSleeve and validate.
+  // Deltas are collected here (reads only) and applied inside the transaction below.
+  const sleeveDeltas: { id: number; delta: number }[] = [];
   if (Array.isArray(body.sleeves)) {
     const current = await prisma.gameSleeve.findMany({ where: { gameId: gameIdNum } });
     const oldBy: Record<number, number> = {};
@@ -60,14 +63,10 @@ export async function PUT(
       }
     }
 
-    // Apply magazine deltas (negative delta = restitution to warehouse)
+    // Collect deltas (negative = restitution to warehouse); applied in the tx.
     for (const sid of allIds) {
       const delta = (newBy[sid] ?? 0) - (oldBy[sid] ?? 0);
-      if (delta === 0) continue;
-      await prisma.sleeve.update({
-        where: { id: sid },
-        data: { quantity: { decrement: delta } },
-      });
+      if (delta !== 0) sleeveDeltas.push({ id: sid, delta });
     }
   }
 
@@ -81,51 +80,56 @@ export async function PUT(
   const newBggId = body.bggId != null ? parseInt(body.bggId) : null;
   const relinked = before != null && newBggId !== before.bggId;
 
-  // Aggiorna il gioco senza sleeveData
-  const game = await prisma.game.update({
-    where: { id: parseInt(id) },
-    data: {
-      bggId:        body.bggId          ?? undefined,
-      name:         body.name,
-      type:         body.type,
-      cost:         body.cost != null    ? parseFloat(body.cost) : null,
-      salePrice:    body.salePrice != null ? parseFloat(body.salePrice) : null,
-      status:       body.status,
-      ...(relinked ? { bggCollId: null } : {}),
-      insert:       body.insert,
-      sleeves:      undefined, // legacy
-      sleeveData:   undefined, // legacy
-      purchaseDate: body.purchaseDate   ? new Date(body.purchaseDate) : null,
-      saleDate:     body.saleDate       ? new Date(body.saleDate) : null,
-      thumbnail:    body.thumbnail      ?? null,
-      image:        body.image          ?? null,
-      description:  body.description    ?? null,
-      designers:    body.designers      ?? "[]",
-      mechanics:    body.mechanics      ?? "[]",
-      bggRating:    body.bggRating != null ? parseFloat(body.bggRating) : null,
-      bggWeight:    body.bggWeight != null ? parseFloat(body.bggWeight) : null,
-      minPlayers:   body.minPlayers != null ? parseInt(body.minPlayers) : null,
-      maxPlayers:   body.maxPlayers != null ? parseInt(body.maxPlayers) : null,
-      playTime:     body.playTime != null ? parseInt(body.playTime) : null,
-      yearPublished: body.yearPublished != null ? parseInt(body.yearPublished) : null,
-      notes:        body.notes          ?? null,
-    },
-  });
+  // Stock deltas + the game update + the association rebuild are one atomic
+  // unit, so a mid-sequence failure can't leave stock and associations out of
+  // step. Runs on the WS-backed client (the HTTP one can't transact).
+  const sleeveRows = Array.isArray(body.sleeves)
+    ? (body.sleeves as { sleeveId: number; qty?: number }[])
+    : null;
 
-  // Aggiorna le associazioni bustine (GameSleeve)
-  if (Array.isArray(body.sleeves)) {
-    // Cancella tutte le associazioni precedenti
-    await prisma.gameSleeve.deleteMany({ where: { gameId: game.id } });
-    // Inserisci le nuove
-    const sleevesToCreate = (body.sleeves as { sleeveId: number; qty?: number }[]).map(s => ({
-      gameId: game.id,
-      sleeveId: s.sleeveId,
-      qty: s.qty ?? 1,
-    }));
-    for (const s of sleevesToCreate) {
-      await prisma.gameSleeve.create({ data: s });
+  const game = await prismaTx.$transaction(async (tx) => {
+    for (const { id: sid, delta } of sleeveDeltas) {
+      await tx.sleeve.update({ where: { id: sid }, data: { quantity: { decrement: delta } } });
     }
-  }
+
+    const updated = await tx.game.update({
+      where: { id: parseInt(id) },
+      data: {
+        bggId:        body.bggId          ?? undefined,
+        name:         body.name,
+        type:         body.type,
+        cost:         body.cost != null    ? parseFloat(body.cost) : null,
+        salePrice:    body.salePrice != null ? parseFloat(body.salePrice) : null,
+        status:       body.status,
+        ...(relinked ? { bggCollId: null } : {}),
+        insert:       body.insert,
+        sleeves:      undefined, // legacy
+        sleeveData:   undefined, // legacy
+        purchaseDate: body.purchaseDate   ? new Date(body.purchaseDate) : null,
+        saleDate:     body.saleDate       ? new Date(body.saleDate) : null,
+        thumbnail:    body.thumbnail      ?? null,
+        image:        body.image          ?? null,
+        description:  body.description    ?? null,
+        designers:    body.designers      ?? "[]",
+        mechanics:    body.mechanics      ?? "[]",
+        bggRating:    body.bggRating != null ? parseFloat(body.bggRating) : null,
+        bggWeight:    body.bggWeight != null ? parseFloat(body.bggWeight) : null,
+        minPlayers:   body.minPlayers != null ? parseInt(body.minPlayers) : null,
+        maxPlayers:   body.maxPlayers != null ? parseInt(body.maxPlayers) : null,
+        playTime:     body.playTime != null ? parseInt(body.playTime) : null,
+        yearPublished: body.yearPublished != null ? parseInt(body.yearPublished) : null,
+        notes:        body.notes          ?? null,
+      },
+    });
+
+    if (sleeveRows) {
+      await tx.gameSleeve.deleteMany({ where: { gameId: updated.id } });
+      for (const s of sleeveRows) {
+        await tx.gameSleeve.create({ data: { gameId: updated.id, sleeveId: s.sleeveId, qty: s.qty ?? 1 } });
+      }
+    }
+    return updated;
+  });
 
   // Restituisci anche le bustine associate
   const gameWithSleeves = await prisma.game.findUnique({
@@ -137,7 +141,7 @@ export async function PUT(
   // otherwise the next sync would simply undo what was just saved here.
   let bgg: { pushed: boolean; pending?: boolean; error?: string } = { pushed: false };
   const statusChanged = before && before.status !== game.status;
-  if (game.bggId && bggFlagsForStatus(game.status)) {
+  if (game.bggId && await statusMapsToBgg(game.status)) {
     try {
       if (!game.bggCollId) {
         // Never made it to BGG (added before this existed, or the push failed).
@@ -189,7 +193,9 @@ export async function DELETE(
     }
   }
 
-  await prisma.gameSleeve.deleteMany({ where: { gameId } });
-  await prisma.game.delete({ where: { id: gameId } });
+  await prismaTx.$transaction(async (tx) => {
+    await tx.gameSleeve.deleteMany({ where: { gameId } });
+    await tx.game.delete({ where: { id: gameId } });
+  });
   return NextResponse.json({ ok: true, bgg: { cleared: !!game.bggCollId } });
 }

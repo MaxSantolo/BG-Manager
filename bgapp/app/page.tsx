@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Library, Heart, BookOpen, BarChart3, Plus } from "lucide-react";
-import { STATUS_LABELS, STATUS_COLORS } from "@/lib/types";
+import StatusBadge from "@/components/StatusBadge";
 import RandomPicker from "@/components/RandomPicker";
+import SyncAllButton from "@/components/SyncAllButton";
 
 export const dynamic = "force-dynamic";
 
@@ -37,9 +38,12 @@ export default async function Home() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>BG Manager</h1>
-        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>Benvenuto nella tua collezione</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>BG Manager</h1>
+          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>Benvenuto nella tua collezione</p>
+        </div>
+        <SyncAllButton />
       </div>
 
       {/* Stat cards */}
@@ -92,9 +96,7 @@ export default async function Home() {
                     : <div className="w-8 h-8 rounded flex-shrink-0" style={{ backgroundColor: "var(--bg-elevated)" }} />
                   }
                   <span className="flex-1 text-sm truncate" style={{ color: "var(--text-primary)" }}>{g.name}</span>
-                  <span className={`badge text-xs ${STATUS_COLORS[g.status as keyof typeof STATUS_COLORS] ?? ""}`}>
-                    {STATUS_LABELS[g.status as keyof typeof STATUS_LABELS] ?? g.status}
-                  </span>
+                  <StatusBadge status={g.status} className="text-xs" />
                 </Link>
               ))}
             </div>

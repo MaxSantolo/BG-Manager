@@ -39,8 +39,10 @@ export default async function CollectionPage({
 
   const where = {
     ...(search ? { name: { contains: search, mode: "insensitive" as const } } : {}),
-    // Se non c'è filtro esplicito, escludi i giochi "Giocato (ospite)"
-    ...(status ? { status } : { NOT: { status: "GiocatoEsterno" } }),
+    // Senza un filtro esplicito la collezione mostra solo ciò che possiedi:
+    // i venduti (storia) e i "Giocato (ospite)" restano fuori, ma raggiungibili
+    // scegliendoli dal filtro stati.
+    ...(status ? { status } : { status: { notIn: ["Venduto", "GiocatoEsterno"] } }),
     ...(type   ? { type }   : {}),
   };
 
@@ -74,7 +76,6 @@ export default async function CollectionPage({
           {unenriched > 0 && <EnrichButton />}
           <CollectionImporter
             initialUsername={settings?.bggUsername ?? ""}
-            initialPassword={settings?.bggPassword ?? ""}
           />
           <Link href="/collection/new" className="btn-primary">
             <Plus size={15} /> Aggiungi

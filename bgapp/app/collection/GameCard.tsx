@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
-import { STATUS_LABELS, STATUS_COLORS } from "@/lib/types";
+import StatusBadge from "@/components/StatusBadge";
 
 interface GameSleeve {
   qty: number;
@@ -66,7 +66,7 @@ export default function GameCard({
         </div>
         <div className="flex flex-wrap gap-2 mt-1 text-xs">
           <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800" style={{ color: "var(--text-secondary)" }}>{type}</span>
-          <span className={`badge ${STATUS_COLORS[status as keyof typeof STATUS_COLORS] ?? "bg-gray-800 text-gray-300"}`}>{STATUS_LABELS[status as keyof typeof STATUS_LABELS] ?? status}</span>
+          <StatusBadge status={status} />
           {cost != null && <span>Costo: €{cost.toFixed(2)}</span>}
           {salePrice != null && <span>Vendita: €{salePrice.toFixed(2)}</span>}
 {insert && <span>Inserto: {insert}</span>}

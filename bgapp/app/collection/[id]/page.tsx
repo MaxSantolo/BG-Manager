@@ -6,7 +6,7 @@ import GameForm from "@/components/GameForm";
 import LoanManager from "@/components/LoanManager";
 import LogPlayModal from "@/components/LogPlayModal";
 import EditPlayModal from "@/components/EditPlayModal";
-import { STATUS_LABELS, STATUS_COLORS } from "@/lib/types";
+import StatusBadge from "@/components/StatusBadge";
 
 export default async function GameDetailPage({
   params,
@@ -50,11 +50,7 @@ export default async function GameDetailPage({
             {game.name}
           </h1>
           <div className="flex flex-wrap items-center gap-2 mt-1.5">
-            <span
-              className={`badge ${STATUS_COLORS[game.status as keyof typeof STATUS_COLORS] ?? "bg-gray-800 text-gray-300"}`}
-            >
-              {STATUS_LABELS[game.status as keyof typeof STATUS_LABELS] ?? game.status}
-            </span>
+            <StatusBadge status={game.status} />
             <span className="text-xs" style={{ color: "var(--text-muted)" }}>{game.type}</span>
             {game.yearPublished && (
               <span className="text-xs" style={{ color: "var(--text-muted)" }}>{game.yearPublished}</span>

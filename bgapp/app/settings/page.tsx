@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Settings } from "lucide-react";
 import SettingsForm from "./SettingsForm";
+import StatusConfigEditor from "./StatusConfigEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -22,10 +23,11 @@ export default async function SettingsPage() {
       </div>
       <SettingsForm
         initialUsername={settings?.bggUsername ?? ""}
-        initialPassword={settings?.bggPassword ?? ""}
+        initialHasPassword={!!settings?.bggPassword?.trim()}
         initialAutoSync={settings?.autoSyncOnStart ?? true}
         initialLastSync={lastSync}
       />
+      <StatusConfigEditor />
     </div>
   );
 }

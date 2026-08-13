@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { bggLogin } from "@/lib/bggAuth";
 import { bggHeaders } from "@/lib/bgg";
+import { classifyFlags, wishlistPriority, isWishlistStatus, parseStatusConfig, type StatusDef } from "@/lib/status";
 
 /**
  * Reads are authenticated with the BGG API key. The session cookie is only
@@ -64,34 +65,7 @@ function subtypeToType(subtype: string): string {
   return "Base";
 }
 
-type Classified =
-  | { kind: "collection"; status: string }
-  | { kind: "wishlist"; priority: number };
-
-/**
- * BGG collection flags → where the item belongs here.
- *
- * Order matters: `fortrade` beats `own` (a game you own and have flagged for
- * trade is "In Vendita"), and `own` beats `preordered` (a preorder that has
- * arrived is simply owned). Items with no flag we understand — want-to-buy,
- * want-to-play, or a bare rating — are skipped rather than guessed at.
- */
-function classifyFlags(statusAttrs: string): Classified | null {
-  const flag = (name: string) => new RegExp(`\\b${name}="1"`).test(statusAttrs);
-  if (flag("fortrade"))   return { kind: "collection", status: "InVendita" };
-  if (flag("own"))        return { kind: "collection", status: "InCollezione" };
-  if (flag("preordered")) return { kind: "collection", status: "Preordinato" };
-  if (flag("prevowned"))  return { kind: "collection", status: "Venduto" };
-  if (flag("wishlist")) {
-    // BGG: 1 = must have … 5 = don't buy. Desiderata: 5 stars = most wanted.
-    const raw = parseInt(statusAttrs.match(/\bwishlistpriority="(\d)"/)?.[1] ?? "3");
-    const priority = Number.isFinite(raw) && raw >= 1 && raw <= 5 ? raw : 3;
-    return { kind: "wishlist", priority };
-  }
-  return null;
-}
-
-function parseCollectionXml(xml: string): BggCollectionGame[] {
+function parseCollectionXml(xml: string, config: StatusDef[]): BggCollectionGame[] {
   const games: BggCollectionGame[] = [];
   const itemRegex = /<item\s((?:[^>"]|"[^"]*")*?)>([\s\S]*?)<\/item>/g;
   let m: RegExpExecArray | null;
@@ -110,8 +84,20 @@ function parseCollectionXml(xml: string): BggCollectionGame[] {
     const name = decodeHtml(body.match(/<name[^>]*sortindex[^>]*>([^<]+)<\/name>/)?.[1]?.trim() ?? "");
     if (!name) continue;
 
-    const cls = classifyFlags(body.match(/<status\s([^>]*?)\/?>/)?.[1] ?? "");
-    if (!cls) continue;
+    // The configured statuses drive classification. A collection status wins;
+    // otherwise a wishlist-flagged item routes to Desiderata; anything else is
+    // skipped (want-to-buy, want-to-play, bare rating).
+    const statusAttrs = body.match(/<status\s([^>]*?)\/?>/)?.[1] ?? "";
+    const key = classifyFlags(config, statusAttrs);
+    let status: string | null = null;
+    let wlPriority: number | null = null;
+    if (key && !isWishlistStatus(config, key)) {
+      status = key;
+    } else if (/\bwishlist="1"/.test(statusAttrs)) {
+      wlPriority = wishlistPriority(statusAttrs);
+    } else {
+      continue;
+    }
 
     const yearPublished = parseInt(body.match(/<yearpublished>(\d+)<\/yearpublished>/)?.[1] ?? "0") || null;
     const thumbnail     = fixUrl(body.match(/<thumbnail>\s*([^<\s]+)\s*<\/thumbnail>/)?.[1] ?? null);
@@ -126,8 +112,8 @@ function parseCollectionXml(xml: string): BggCollectionGame[] {
     games.push({
       bggId, collId, name, subtype, yearPublished, thumbnail, image, bggRating,
       minPlayers, maxPlayers, playTime,
-      status:           cls.kind === "collection" ? cls.status : null,
-      wishlistPriority: cls.kind === "wishlist"   ? cls.priority : null,
+      status,
+      wishlistPriority: wlPriority,
     });
   }
 
@@ -159,6 +145,10 @@ async function fetchCollectionXml(url: string, cookie?: string): Promise<string>
 export async function syncCollection(username: string, cookie?: string): Promise<CollectionSyncResult> {
   const base = `https://boardgamegeek.com/xmlapi2/collection?username=${encodeURIComponent(username)}&stats=1`;
 
+  // The user-configurable status↔BGG mapping drives how items are classified.
+  const settings = await prisma.settings.findUnique({ where: { id: 1 }, select: { statusConfig: true } });
+  const statusConfig = parseStatusConfig(settings?.statusConfig);
+
   // No status filter: BGG ANDs them, so we pull the whole collection and keep
   // the items whose flags map to a status (own / prevowned / fortrade).
   const xml = await fetchCollectionXml(base, cookie);
@@ -176,7 +166,7 @@ export async function syncCollection(username: string, cookie?: string): Promise
     // keep the empty set
   }
 
-  const parsed    = parseCollectionXml(xml);
+  const parsed    = parseCollectionXml(xml, statusConfig);
   const bggGames  = parsed.filter(g => g.status !== null);
   const wishlist  = parsed.filter(g => g.wishlistPriority !== null);
 
@@ -341,7 +331,7 @@ function parsePlaysXml(xml: string): { total: number; plays: BggPlay[] } {
   return { total, plays };
 }
 
-export interface PlaysSyncResult { imported: number; unchanged: number; removed: number; total: number }
+export interface PlaysSyncResult { imported: number; unchanged: number; total: number }
 
 export async function syncPlays(username: string, cookie?: string): Promise<PlaysSyncResult> {
   async function fetchPage(page: number): Promise<{ total: number; plays: BggPlay[] }> {
@@ -440,22 +430,10 @@ export async function syncPlays(username: string, cookie?: string): Promise<Play
     imported++;
   }
 
-  // Self-heal deletions: a local play that once came from BGG (has a bggPlayId)
-  // but is no longer in the collection was deleted there — on the website, or
-  // by a delete here whose local half never committed. Remove it so it can't
-  // linger as a phantom. Plays with no bggPlayId (pending pushes, manual entries)
-  // are never touched.
-  //
-  // Guarded hard: only when we fetched the FULL history (allPlays.length >= total)
-  // and it is non-empty, so a partial or glitchy response can never wipe data.
-  let removed = 0;
-  if (allPlays.length > 0 && allPlays.length >= total) {
-    const bggIds = allPlays.map(p => p.bggPlayId).filter((v): v is number => !!v);
-    const res = await prisma.play.deleteMany({
-      where: { bggPlayId: { not: null, notIn: bggIds } },
-    });
-    removed = res.count;
-  }
-
-  return { imported, unchanged, removed, total: allPlays.length };
+  // App-authoritative deletions (hybrid sync): a play removed on the BGG website
+  // is intentionally NOT pruned here — the app is the source of truth for what
+  // exists. Deletions flow only app→BGG (the play DELETE route removes it there
+  // first). Edits and brand-new plays still flow BGG→app above, so a play logged
+  // or corrected directly on BGG is picked up; only deletions don't propagate back.
+  return { imported, unchanged, total: allPlays.length };
 }

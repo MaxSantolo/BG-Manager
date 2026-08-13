@@ -81,7 +81,6 @@ export default async function PlaysPage() {
           </Link>
           <PlaysImporter
             initialUsername={settings?.bggUsername ?? ""}
-            initialPassword={settings?.bggPassword ?? ""}
           />
         </div>
       </div>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Dice5, RefreshCw, X, ExternalLink, Star, Users, Clock } from "lucide-react";
+import { apiFetch } from "@/lib/fetchClient";
 
 interface Game {
   id: number;
@@ -36,8 +37,15 @@ export default function RandomPicker() {
     if (maxTime) params.set("maxTime", maxTime);
     if (exclude.length) params.set("exclude", exclude.join(","));
 
-    const res = await fetch(`/api/games/random?${params}`);
-    const data = await res.json();
+    const res = await apiFetch<Game | null>(`/api/games/random?${params}`);
+
+    if (!res.ok || res.timedOut || res.networkError) {
+      setLoading(false);
+      setNoResults(true);
+      setGame(null);
+      return;
+    }
+    const data = res.data;
     setLoading(false);
 
     if (!data) {

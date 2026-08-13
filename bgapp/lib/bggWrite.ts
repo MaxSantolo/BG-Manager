@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { bggLogin } from "@/lib/bggAuth";
 import { getBggUser } from "@/lib/bgg";
+import { flagsForStatus, parseStatusConfig, type StatusDef } from "@/lib/status";
 
 /**
  * Writing to BGG goes through geekplay.php, the site's own AJAX endpoint —
@@ -158,16 +159,20 @@ export async function savePlayToBgg(input: BggPlayInput): Promise<number> {
 const COLLECTION_ITEM_URL = (collId: number) =>
   `https://boardgamegeek.com/api/collectionitems/${collId}`;
 
-/** GameStatus → BGG flags. The inverse of the sync's classifyFlags(). */
-export function bggFlagsForStatus(status: string): Record<string, boolean> | null {
-  switch (status) {
-    case "InCollezione": return { own: true };
-    case "InVendita":    return { own: true, fortrade: true };
-    case "Venduto":      return { prevowned: true };
-    case "Preordinato":  return { preordered: true };
-    // "GiocatoEsterno" is ours alone — BGG has no equivalent, so never push it.
-    default:             return null;
-  }
+/** Loads the user-configured status↔BGG mapping (falls back to built-in defaults). */
+async function loadStatusConfig(): Promise<StatusDef[]> {
+  const s = await prisma.settings.findUnique({ where: { id: 1 }, select: { statusConfig: true } });
+  return parseStatusConfig(s?.statusConfig);
+}
+
+/** app status key → BGG flags per the configured mapping, or null if unmapped. */
+export async function bggFlagsForStatus(status: string): Promise<Record<string, boolean> | null> {
+  return flagsForStatus(await loadStatusConfig(), status);
+}
+
+/** Cheap guard for callers: does this status push to BGG at all? */
+export async function statusMapsToBgg(status: string): Promise<boolean> {
+  return (await bggFlagsForStatus(status)) !== null;
 }
 
 async function collectionItem(cookie: string, collId: number): Promise<Record<string, unknown>> {
@@ -204,7 +209,7 @@ async function putCollectionItem(cookie: string, collId: number, item: Record<st
  * comments, price paid and the rest of the entry are echoed back untouched.
  */
 export async function updateCollectionStatusOnBgg(collId: number, status: string): Promise<void> {
-  const flags = bggFlagsForStatus(status);
+  const flags = await bggFlagsForStatus(status);
   if (!flags) return;
 
   const cookie = await sessionCookie();
@@ -218,20 +223,36 @@ interface CollectionLookupItem {
 }
 
 /**
- * Without a userid filter this endpoint returns one page of *every* user's
- * entry for the game, so on a popular title ours may not be on it — which
- * would look like "not in your collection" and create a duplicate. Filtering
- * by user id returns exactly our entry.
+ * Result of looking up whether a game is already in the user's BGG collection.
+ * "unknown" (lookup failed) is deliberately distinct from "absent" (confirmed
+ * not there): creating on "unknown" is exactly what mints duplicate entries.
  */
-async function findOwnCollId(cookie: string, username: string, bggId: number): Promise<number | null> {
-  const user = await getBggUser(username);
-  const filter = user.id ? `&userid=${user.id}` : "";
+type CollLookup =
+  | { state: "found"; collId: number }
+  | { state: "absent" }
+  | { state: "unknown" };
 
-  const res = await fetch(
-    `https://boardgamegeek.com/api/collections?objecttype=thing&objectid=${bggId}${filter}`,
-    { cache: "no-store", headers: { Cookie: cookie } }
-  );
-  if (!res.ok) return null;
+/**
+ * Without a userid filter this endpoint returns one page of *every* user's
+ * entry for the game, so on a popular title ours may not be on it — which would
+ * look like "not in your collection". So we require the userid filter: if we
+ * can't resolve the user id, or the request fails, the answer is "unknown", not
+ * "absent" — the caller must not create in that case.
+ */
+async function findOwnColl(cookie: string, username: string, bggId: number): Promise<CollLookup> {
+  const user = await getBggUser(username);
+  if (!user.id) return { state: "unknown" };   // can't scope the query → don't guess
+
+  let res: Response;
+  try {
+    res = await fetch(
+      `https://boardgamegeek.com/api/collections?objecttype=thing&objectid=${bggId}&userid=${user.id}`,
+      { cache: "no-store", headers: { Cookie: cookie } }
+    );
+  } catch {
+    return { state: "unknown" };
+  }
+  if (!res.ok) return { state: "unknown" };
 
   try {
     const data = await res.json();
@@ -240,9 +261,10 @@ async function findOwnCollId(cookie: string, username: string, bggId: number): P
       const u = typeof i.user === "string" ? i.user : i.user?.username;
       return u?.toLowerCase() === username.toLowerCase();
     });
-    return mine?.collid ? Number(mine.collid) : null;
+    if (mine?.collid) return { state: "found", collId: Number(mine.collid) };
+    return { state: "absent" };
   } catch {
-    return null;
+    return { state: "unknown" };
   }
 }
 
@@ -252,17 +274,21 @@ async function findOwnCollId(cookie: string, username: string, bggId: number): P
  * entry for the same game; creates only when there genuinely isn't one.
  */
 export async function ensureCollectionItemOnBgg(bggId: number, status: string): Promise<number | null> {
-  const flags = bggFlagsForStatus(status);
+  const flags = await bggFlagsForStatus(status);
   if (!flags) return null;
 
   const { username, cookie } = await credentials();
 
-  const existing = await findOwnCollId(cookie, username, bggId);
-  if (existing) {
-    const item = await collectionItem(cookie, existing);
-    await putCollectionItem(cookie, existing, { ...item, status: flags });
-    return existing;
+  const lookup = await findOwnColl(cookie, username, bggId);
+  if (lookup.state === "found") {
+    const item = await collectionItem(cookie, lookup.collId);
+    await putCollectionItem(cookie, lookup.collId, { ...item, status: flags });
+    return lookup.collId;
   }
+  // Couldn't confirm it's absent — refuse to create, or we'd risk a duplicate.
+  // The game is already saved locally; the next sync reconciles the BGG side.
+  if (lookup.state === "unknown")
+    throw new BggWriteError("Impossibile verificare la collezione BGG; riprovo alla prossima sincronizzazione.");
 
   const res = await fetch("https://boardgamegeek.com/api/collectionitems", {
     method: "POST",
@@ -275,8 +301,11 @@ export async function ensureCollectionItemOnBgg(bggId: number, status: string): 
     throw new BggWriteError("BGG ha risposto con una verifica del browser invece che con l'API.");
   if (!res.ok) throw new BggWriteError(`BGG non ha accettato il gioco (${res.status})`);
 
-  // The create response carries no id, so read it back.
-  return findOwnCollId(cookie, username, bggId);
+  // The create response carries no id, so read it back. If the readback can't
+  // confirm it, leave the id null — the create already succeeded and the next
+  // sync will fill it in — but never treat that as "absent" and re-create.
+  const after = await findOwnColl(cookie, username, bggId);
+  return after.state === "found" ? after.collId : null;
 }
 
 /**

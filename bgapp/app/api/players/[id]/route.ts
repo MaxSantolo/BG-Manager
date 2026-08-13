@@ -4,7 +4,8 @@ import { getBggUser } from "@/lib/bgg";
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { name, bggUsername } = await req.json();
+  const body = await req.json();
+  const { name, bggUsername } = body;
   const cleanName = typeof name === "string" ? name.trim() : "";
   const cleanUser = typeof bggUsername === "string" ? bggUsername.trim() : "";
 
@@ -25,6 +26,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     } else {
       avatarUrl = null;
     }
+    avatarCheckedAt = new Date();
+  }
+
+  // A manual image URL wins over the BGG avatar (for anonymous players, or to
+  // override). Sending an empty string clears it. avatarCheckedAt is stamped so
+  // the registry rebuild won't overwrite a manual image from BGG.
+  if (typeof body.avatarUrl === "string") {
+    avatarUrl = body.avatarUrl.trim() || null;
     avatarCheckedAt = new Date();
   }
 

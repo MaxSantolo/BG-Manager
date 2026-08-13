@@ -3,20 +3,20 @@
 import { useState } from "react";
 import { Download, Loader2, X, CheckCircle, AlertCircle, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
+import { apiFetch } from "@/lib/fetchClient";
 
 interface Props {
   initialUsername?: string;
-  initialPassword?: string;
 }
 
 type Status = "idle" | "loading" | "done" | "error";
 
-export default function CollectionImporter({ initialUsername, initialPassword }: Props) {
+export default function CollectionImporter({ initialUsername }: Props) {
   const hasSaved = !!initialUsername?.trim();
 
   const [open, setOpen]         = useState(false);
   const [username, setUsername] = useState(initialUsername ?? "");
-  const [password, setPassword] = useState(initialPassword ?? "");
+  const [password, setPassword] = useState("");
   const [showPw, setShowPw]     = useState(false);
   const [status, setStatus]     = useState<Status>("idle");
   const [message, setMessage]   = useState("");
@@ -24,28 +24,43 @@ export default function CollectionImporter({ initialUsername, initialPassword }:
   async function runImport(u: string, p: string) {
     setStatus("loading");
     setMessage("Connessione a BGG… (può richiedere qualche secondo)");
-    const res = await fetch("/api/games/import-bgg", {
+    // The import runs the full collection sync — allow well past the server cap.
+    const res = await apiFetch<{
+      error?: string; imported?: number; statusChanged?: number;
+      wishlistImported?: number; enriched?: number;
+    }>("/api/games/import-bgg", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: u.trim(), password: p }),
-    });
-    const data = await res.json();
+    }, 90000);
+
+    if (res.timedOut) {
+      setStatus("error");
+      setMessage("Importazione lenta o interrotta. Riprova o ricarica per vedere cosa è stato importato.");
+      return;
+    }
+    if (res.networkError) {
+      setStatus("error");
+      setMessage("Connessione assente. Riprova.");
+      return;
+    }
+    const data = res.data ?? {};
     if (!res.ok || data.error) {
       setStatus("error");
       setMessage(data.error ?? "Errore durante l'importazione");
       return;
     }
     setStatus("done");
-    const parts = [`${data.imported} nuovi giochi importati`];
-    if (data.statusChanged > 0) parts.push(`${data.statusChanged} stati aggiornati`);
-    if (data.wishlistImported > 0) parts.push(`${data.wishlistImported} aggiunti ai desiderata`);
-    if (data.enriched > 0) parts.push(`${data.enriched} aggiornati con dati mancanti`);
+    const parts = [`${data.imported ?? 0} nuovi giochi importati`];
+    if ((data.statusChanged ?? 0) > 0) parts.push(`${data.statusChanged} stati aggiornati`);
+    if ((data.wishlistImported ?? 0) > 0) parts.push(`${data.wishlistImported} aggiunti ai desiderata`);
+    if ((data.enriched ?? 0) > 0) parts.push(`${data.enriched} aggiornati con dati mancanti`);
     setMessage(parts.join(", ") + ".");
   }
 
   function startClick() {
     setOpen(true);
-    if (hasSaved) runImport(initialUsername!, initialPassword!);
+    if (hasSaved) runImport(initialUsername!, "");
   }
 
   function close() {

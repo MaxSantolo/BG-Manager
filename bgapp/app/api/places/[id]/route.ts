@@ -8,7 +8,8 @@ import { prisma } from "@/lib/prisma";
  */
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { name } = await req.json();
+  const body = await req.json();
+  const { name } = body;
   const cleanName = typeof name === "string" ? name.trim() : "";
   if (!cleanName) return NextResponse.json({ error: "Nome richiesto" }, { status: 400 });
 
@@ -25,9 +26,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     });
   }
 
+  // Optional manual image (empty string clears it); places have no BGG source.
+  const imageUrl = typeof body.imageUrl === "string" ? (body.imageUrl.trim() || null) : undefined;
+
   const place = await prisma.place.update({
     where: { id: parseInt(id) },
-    data:  { name: cleanName },
+    data:  { name: cleanName, imageUrl },
   });
   return NextResponse.json(place);
 }

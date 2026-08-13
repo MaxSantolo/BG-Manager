@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Pencil, Trash2, X, Save, Loader2, AlertCircle } from "lucide-react";
+import { apiFetch } from "@/lib/fetchClient";
 import PlayerPicker, { type PlayPlayer } from "./PlayerPicker";
 import PlacePicker from "./PlacePicker";
 
@@ -50,43 +51,59 @@ export default function EditPlayModal({ play }: Props) {
     e.preventDefault();
     setSaving(true);
     setError(null);
-    const res = await fetch(`/api/plays/${play.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        date, quantity: parseInt(quantity) || 1,
-        duration: duration ? parseInt(duration) : null,
-        location: location || null, notes: notes || null,
-        incomplete, gameName: play.gameName,
-        players: players.filter(p => p.name.trim()),
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    setSaving(false);
+    try {
+      const res = await apiFetch<{ bgg?: { error?: string } }>(`/api/plays/${play.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date, quantity: parseInt(quantity) || 1,
+          duration: duration ? parseInt(duration) : null,
+          location: location || null, notes: notes || null,
+          incomplete, gameName: play.gameName,
+          players: players.filter(p => p.name.trim()),
+        }),
+      });
 
-    // Saved locally either way; only the BGG leg can fail on its own.
-    if (data?.bgg?.error) {
-      setError(`Salvato in locale, ma non su BGG: ${data.bgg.error}`);
-      return;
+      if (res.timedOut) {
+        setError("Salvataggio lento. La modifica dovrebbe essere applicata: ricarica per verificare.");
+        return;
+      }
+      if (res.networkError) { setError("Connessione assente. Riprova."); return; }
+      if (!res.ok) { setError("Errore durante il salvataggio."); return; }
+      // Saved locally either way; only the BGG leg can fail on its own — surface
+      // it but still close, since the edit itself succeeded.
+      if (res.data?.bgg?.error) {
+        setError(`Salvato in locale, ma non su BGG: ${res.data.bgg.error}`);
+        return;
+      }
+      setOpen(false);
+      window.location.reload();
+    } finally {
+      setSaving(false);
     }
-    setOpen(false);
-    window.location.reload();
   }
 
   async function handleDelete() {
     if (!confirm("Eliminare questa partita? Verrà rimossa anche da BGG.")) return;
     setDeleting(true);
     setError(null);
-    const res = await fetch(`/api/plays/${play.id}`, { method: "DELETE" });
-    setDeleting(false);
+    try {
+      const res = await apiFetch<{ error?: string; hint?: string }>(`/api/plays/${play.id}`, { method: "DELETE" });
 
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError([data.error, data.hint].filter(Boolean).join(" ") || "Eliminazione non riuscita.");
-      return;
+      if (res.timedOut) {
+        setError("Eliminazione lenta. Verrà completata a breve: ricarica per verificare.");
+        return;
+      }
+      if (res.networkError) { setError("Connessione assente. Riprova."); return; }
+      if (!res.ok) {
+        setError([res.data?.error, res.data?.hint].filter(Boolean).join(" ") || "Eliminazione non riuscita.");
+        return;
+      }
+      setOpen(false);
+      window.location.reload();
+    } finally {
+      setDeleting(false);
     }
-    setOpen(false);
-    window.location.reload();
   }
 
   return (

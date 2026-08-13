@@ -131,13 +131,13 @@ function buildCostByYear(games: { purchaseDate: Date | null; cost: number | null
   const byYear: Record<string, { purchased: number; sold: number; cost: number; revenue: number }> = {};
   for (const g of games) {
     if (g.purchaseDate) {
-      const y = String(new Date(g.purchaseDate).getFullYear());
+      const y = String(new Date(g.purchaseDate).getUTCFullYear());
       if (!byYear[y]) byYear[y] = { purchased: 0, sold: 0, cost: 0, revenue: 0 };
       byYear[y].purchased++;
       byYear[y].cost += g.cost ?? 0;
     }
     if (g.saleDate) {
-      const y = String(new Date(g.saleDate).getFullYear());
+      const y = String(new Date(g.saleDate).getUTCFullYear());
       if (!byYear[y]) byYear[y] = { purchased: 0, sold: 0, cost: 0, revenue: 0 };
       byYear[y].sold++;
       byYear[y].revenue += g.salePrice ?? 0;

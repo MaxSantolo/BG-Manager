@@ -54,10 +54,11 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const play = await prisma.play.findUnique({ where: { id: parseInt(id) } });
   if (!play) return NextResponse.json({ error: "Partita non trovata" }, { status: 404 });
 
-  // Remove it on BGG first. Deleting locally while it still exists there would
-  // just let the next sync import it straight back. Bounded so a slow phone
-  // connection can't hang the request; on timeout we leave the local row and
-  // let the next sync reconcile (it prunes plays no longer on BGG).
+  // Remove it on BGG first, then locally — the app is authoritative for deletes,
+  // so the next sync won't remove the BGG copy on its own. Deleting locally while
+  // it still exists on BGG would also let the sync re-import it. Bounded so a slow
+  // phone connection can't hang the request; on timeout we keep the local row and
+  // report it so the user can retry.
   if (play.bggPlayId) {
     try {
       await withBggTimeout(deletePlayFromBgg(play.bggPlayId));

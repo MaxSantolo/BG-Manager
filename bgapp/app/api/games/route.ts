@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { prismaTx } from "@/lib/prismaTx";
 import { getBggGame } from "@/lib/bgg";
 import { ensureCollectionItemOnBgg, withBggTimeout, BggWriteError, BggTimeoutError } from "@/lib/bggWrite";
 
@@ -59,51 +60,50 @@ export async function POST(request: NextRequest) {
     bggData = await getBggGame(parseInt(body.bggId));
   }
 
-  // Crea il gioco senza sleeveData
-  const game = await prisma.game.create({
-    data: {
-      bggId:        body.bggId           ? parseInt(body.bggId) : null,
-      name:         body.name,
-      type:         body.type            || "Base",
-      cost:         body.cost != null    ? parseFloat(body.cost) : null,
-      salePrice:    body.salePrice != null ? parseFloat(body.salePrice) : null,
-      status:       body.status          || "InCollezione",
-      insert:       body.insert          || "No",
-      sleeves:      undefined, // campo legacy, non più usato
-      sleeveData:   undefined, // campo legacy, non più usato
-      purchaseDate: body.purchaseDate    ? new Date(body.purchaseDate) : null,
-      saleDate:     body.saleDate        ? new Date(body.saleDate) : null,
-      thumbnail:    bggData?.thumbnail   || body.thumbnail   || null,
-      image:        bggData?.image       || body.image       || null,
-      description:  bggData?.description || body.description || null,
-      designers:    JSON.stringify(bggData?.designers ?? (body.designers ? JSON.parse(body.designers) : [])),
-      mechanics:    JSON.stringify(bggData?.mechanics ?? (body.mechanics ? JSON.parse(body.mechanics) : [])),
-      bggRating:    bggData?.bggRating   ?? (body.bggRating != null ? parseFloat(body.bggRating) : null),
-      bggWeight:    bggData?.bggWeight   ?? (body.bggWeight != null ? parseFloat(body.bggWeight) : null),
-      minPlayers:   bggData?.minPlayers  ?? (body.minPlayers != null ? parseInt(body.minPlayers) : null),
-      maxPlayers:   bggData?.maxPlayers  ?? (body.maxPlayers != null ? parseInt(body.maxPlayers) : null),
-      playTime:     bggData?.playTime    ?? (body.playTime != null ? parseInt(body.playTime) : null),
-      yearPublished: bggData?.yearPublished ?? (body.yearPublished != null ? parseInt(body.yearPublished) : null),
-      notes:        body.notes           || null,
-      bggEnrichedAt: bggData ? new Date() : null,
-    },
-  });
+  // Game row + its sleeve associations + the warehouse decrements are one
+  // atomic unit: a mid-sequence failure must not leave a game with mismatched
+  // stock. Runs on the WS-backed client because the HTTP one can't transact.
+  const sleeveRows = Array.isArray(body.sleeves)
+    ? (body.sleeves as { sleeveId: number; qty?: number }[])
+    : [];
 
-  // Gestione associazione bustine (GameSleeve)
-  if (Array.isArray(body.sleeves)) {
-    const sleevesToCreate = (body.sleeves as { sleeveId: number; qty?: number }[]).map(s => ({
-      gameId: game.id,
-      sleeveId: s.sleeveId,
-      qty: s.qty ?? 1,
-    }));
-    for (const s of sleevesToCreate) {
-      await prisma.gameSleeve.create({ data: s });
-      await prisma.sleeve.update({
-        where: { id: s.sleeveId },
-        data: { quantity: { decrement: s.qty } },
-      });
+  const game = await prismaTx.$transaction(async (tx) => {
+    const created = await tx.game.create({
+      data: {
+        bggId:        body.bggId           ? parseInt(body.bggId) : null,
+        name:         body.name,
+        type:         body.type            || "Base",
+        cost:         body.cost != null    ? parseFloat(body.cost) : null,
+        salePrice:    body.salePrice != null ? parseFloat(body.salePrice) : null,
+        status:       body.status          || "InCollezione",
+        insert:       body.insert          || "No",
+        sleeves:      undefined, // campo legacy, non più usato
+        sleeveData:   undefined, // campo legacy, non più usato
+        purchaseDate: body.purchaseDate    ? new Date(body.purchaseDate) : null,
+        saleDate:     body.saleDate        ? new Date(body.saleDate) : null,
+        thumbnail:    bggData?.thumbnail   || body.thumbnail   || null,
+        image:        bggData?.image       || body.image       || null,
+        description:  bggData?.description || body.description || null,
+        designers:    JSON.stringify(bggData?.designers ?? (body.designers ? JSON.parse(body.designers) : [])),
+        mechanics:    JSON.stringify(bggData?.mechanics ?? (body.mechanics ? JSON.parse(body.mechanics) : [])),
+        bggRating:    bggData?.bggRating   ?? (body.bggRating != null ? parseFloat(body.bggRating) : null),
+        bggWeight:    bggData?.bggWeight   ?? (body.bggWeight != null ? parseFloat(body.bggWeight) : null),
+        minPlayers:   bggData?.minPlayers  ?? (body.minPlayers != null ? parseInt(body.minPlayers) : null),
+        maxPlayers:   bggData?.maxPlayers  ?? (body.maxPlayers != null ? parseInt(body.maxPlayers) : null),
+        playTime:     bggData?.playTime    ?? (body.playTime != null ? parseInt(body.playTime) : null),
+        yearPublished: bggData?.yearPublished ?? (body.yearPublished != null ? parseInt(body.yearPublished) : null),
+        notes:        body.notes           || null,
+        bggEnrichedAt: bggData ? new Date() : null,
+      },
+    });
+
+    for (const s of sleeveRows) {
+      const qty = s.qty ?? 1;
+      await tx.gameSleeve.create({ data: { gameId: created.id, sleeveId: s.sleeveId, qty } });
+      await tx.sleeve.update({ where: { id: s.sleeveId }, data: { quantity: { decrement: qty } } });
     }
-  }
+    return created;
+  });
 
   // Restituisci anche le bustine associate
   const gameWithSleeves = await prisma.game.findUnique({

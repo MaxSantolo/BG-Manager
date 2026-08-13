@@ -8,10 +8,9 @@ import BggSearch from "@/components/BggSearch";
 import SleeveEditor from "@/components/SleeveEditor";
 import { useToast } from "@/components/Toast";
 import type { BggGameDetail } from "@/lib/bgg";
-import {
-  GAME_TYPES, GAME_STATUSES, INSERT_OPTIONS,
-  STATUS_LABELS,
-} from "@/lib/types";
+import { apiFetch } from "@/lib/fetchClient";
+import { useStatuses } from "@/components/StatusProvider";
+import { GAME_TYPES, INSERT_OPTIONS } from "@/lib/types";
 
 type Mode = "collection" | "wishlist";
 
@@ -42,6 +41,7 @@ const Label = ({ children }: { children: React.ReactNode }) => (
 export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
   const router = useRouter();
   const { show } = useToast();
+  const statuses = useStatuses();
   const isWishlist = mode === "wishlist";
   const backUrl = returnUrl ?? (isWishlist ? "/wishlist" : "/collection");
   const [saving, setSaving] = useState(false);
@@ -151,14 +151,18 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
   async function refreshFromBgg() {
     if (!bggId) return;
     setSaving(true);
-    const res = await fetch(`/api/bgg?id=${bggId}`);
-    if (res.ok) applyBggData(await res.json());
-    setSaving(false);
+    try {
+      const res = await apiFetch<BggGameDetail>(`/api/bgg?id=${bggId}`);
+      if (res.ok && res.data) applyBggData(res.data);
+      else show("Impossibile caricare i dati da BGG.", "error");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim()) { show("Inserisci il nome del gioco.", "error"); return; }
     setSaving(true);
 
     const payload: Record<string, unknown> = {
@@ -196,54 +200,66 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
     const url    = id ? `${base}/${id}` : base;
     const method = id ? "PUT" : "POST";
 
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    try {
+      const res = await apiFetch<{
+        bgg?: { pushed?: boolean; pending?: boolean; error?: string };
+        insufficient?: { size: string; label: string | null; requested: number; available: number }[];
+      }>(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    if (!res.ok) {
-      setSaving(false);
-      if (res.status === 409) {
-        const data = await res.json().catch(() => null);
-        const items = (data?.insufficient ?? []) as { size: string; label: string | null; requested: number; available: number }[];
-        const detail = items.map(i => `${i.label || i.size}: servono ${i.requested}, disponibili ${i.available}`).join("; ");
-        show(`Magazzino bustine insufficiente. ${detail}. Rifornisci dalla pagina Bustine.`, "error");
-      } else {
-        show("Errore durante il salvataggio", "error");
+      if (res.networkError) { show("Connessione assente. Riprova.", "error"); return; }
+      if (res.timedOut) {
+        // Saved locally first, server-side, so it almost certainly landed.
+        show(`Salvataggio lento: ${id ? "modifiche" : "gioco"} probabilmente salvat${id ? "e" : "o"}, verifica nell'elenco.`);
+        router.push(backUrl);
+        router.refresh();
+        return;
       }
-      return;
-    }
+      if (!res.ok) {
+        if (res.status === 409) {
+          const items = res.data?.insufficient ?? [];
+          const detail = items.map(i => `${i.label || i.size}: servono ${i.requested}, disponibili ${i.available}`).join("; ");
+          show(`Magazzino bustine insufficiente. ${detail}. Rifornisci dalla pagina Bustine.`, "error");
+        } else {
+          show("Errore durante il salvataggio", "error");
+        }
+        return;
+      }
 
-    // Saved locally either way; only the BGG status push can fail on its own.
-    const saved = await res.json().catch(() => ({}));
-    if (saved?.bgg?.error) {
-      show(`Salvato, ma non su BGG: ${saved.bgg.error}`, "error");
-    } else if (saved?.bgg?.pending) {
-      show(`${id ? "Modifiche salvate" : "Gioco aggiunto"}. Sincronizzazione BGG in corso.`);
-    } else {
-      show(id ? "Modifiche salvate" : "Gioco aggiunto");
+      // Saved locally either way; only the BGG status push can fail on its own.
+      if (res.data?.bgg?.error) {
+        show(`Salvato, ma non su BGG: ${res.data.bgg.error}`, "error");
+      } else if (res.data?.bgg?.pending) {
+        show(`${id ? "Modifiche salvate" : "Gioco aggiunto"}. Sincronizzazione BGG in corso.`);
+      } else {
+        show(id ? "Modifiche salvate" : "Gioco aggiunto");
+      }
+      router.push(backUrl);
+      router.refresh();
+    } finally {
+      setSaving(false);
     }
-
-    setSaving(false);
-    router.push(backUrl);
-    router.refresh();
   }
 
   async function handleDelete() {
     if (!id || !confirm("Eliminare definitivamente questo gioco? Verrà rimosso anche dalla collezione BGG.")) return;
     const base = isWishlist ? "/api/wishlist" : "/api/games";
-    const res = await fetch(`${base}/${id}`, { method: "DELETE" });
+    const res = await apiFetch<{ error?: string; hint?: string }>(`${base}/${id}`, { method: "DELETE" });
+
     if (res.ok) {
       show("Gioco eliminato");
       router.push(backUrl);
       router.refresh();
-    } else {
-      // A 409 means BGG still has it: deleting only here would let the next
-      // sync bring it straight back, so say why instead of failing vaguely.
-      const data = await res.json().catch(() => ({}));
-      show([data.error, data.hint].filter(Boolean).join(" ") || "Errore durante l'eliminazione", "error");
+      return;
     }
+    if (res.networkError) { show("Connessione assente. Riprova.", "error"); return; }
+    if (res.timedOut)     { show("Eliminazione lenta, riprova tra poco.", "error"); return; }
+    // A 409 means BGG still has it: deleting only here would let the next sync
+    // bring it straight back, so say why instead of failing vaguely.
+    show([res.data?.error, res.data?.hint].filter(Boolean).join(" ") || "Errore durante l'eliminazione", "error");
   }
 
   const hasBggInfo = !!(thumbnail || image || bggRating || designers.length || description);
@@ -404,7 +420,9 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
               <div>
                 <Label>Stato</Label>
                 <select value={status} onChange={e => setStatus(e.target.value)} className="w-full">
-                  {GAME_STATUSES.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+                  {statuses
+                    .filter(s => !s.hidden || s.key === status)
+                    .map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
                 </select>
               </div>
               <div>

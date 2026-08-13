@@ -4,7 +4,9 @@ import { useState, useTransition, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { Search, ChevronLeft, ChevronRight, ExternalLink, Download } from "lucide-react";
-import { GAME_TYPES, GAME_STATUSES, STATUS_LABELS, STATUS_COLORS } from "@/lib/types";
+import { GAME_TYPES } from "@/lib/types";
+import { useStatuses } from "@/components/StatusProvider";
+import StatusBadge from "@/components/StatusBadge";
 import GameCard from "./GameCard";
 
 interface GameSleeve {
@@ -64,6 +66,7 @@ export default function CollectionTable({
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
+  const statuses = useStatuses();
   const [isPending, startTransition] = useTransition();
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -133,8 +136,8 @@ export default function CollectionTable({
         </div>
         <select value={status} onChange={(e) => onStatus(e.target.value)} className="text-sm">
           <option value="">Tutti gli stati</option>
-          {GAME_STATUSES.map((s) => (
-            <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+          {statuses.filter((s) => !s.hidden).map((s) => (
+            <option key={s.key} value={s.key}>{s.label}</option>
           ))}
         </select>
         <select value={type} onChange={(e) => onType(e.target.value)} className="text-sm">
@@ -221,9 +224,7 @@ export default function CollectionTable({
                   <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{game.type}</span>
                 </td>
                 <td>
-                  <span className={`badge ${STATUS_COLORS[game.status as keyof typeof STATUS_COLORS] ?? "bg-gray-800 text-gray-300"}`}>
-                    {STATUS_LABELS[game.status as keyof typeof STATUS_LABELS] ?? game.status}
-                  </span>
+                  <StatusBadge status={game.status} />
                 </td>
                 <td className="text-right text-sm">
                   {game.cost != null ? `€${game.cost.toFixed(2)}` : <span style={{ color: "var(--text-muted)" }}>—</span>}

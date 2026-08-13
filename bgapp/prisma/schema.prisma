@@ -40,6 +40,9 @@ model Game {
   gameSleeves   GameSleeve[]
   loans         Loan[]
   plays         Play[]
+
+  @@index([bggId])
+  @@index([status])
 }
 
 model WishlistGame {
@@ -91,6 +94,8 @@ model Loan {
   notes      String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+
+  @@index([gameId])
 }
 
 model GameSleeve {
@@ -103,6 +108,9 @@ model GameSleeve {
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([gameId])
+  @@index([sleeveId])
 }
 
 model Play {
@@ -120,6 +128,10 @@ model Play {
   game       Game?    @relation(fields: [gameId], references: [id], onDelete: SetNull)
   players    String?
   createdAt  DateTime @default(now())
+
+  @@index([date])
+  @@index([gameId])
+  @@index([bggGameId])
 }
 
 /// Registry of people you play with, so plays can be logged by picking a name
@@ -144,6 +156,7 @@ model Player {
 model Place {
   id        Int      @id @default(autoincrement())
   name      String   @unique
+  imageUrl  String?
   playCount Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -155,4 +168,7 @@ model Settings {
   bggPassword     String?
   autoSyncOnStart Boolean   @default(true)
   lastSyncAt      DateTime?
+  /// JSON array of status definitions (label/color/BGG-flag mapping). Null = use
+  /// the built-in defaults from lib/status.ts. See StatusDef there.
+  statusConfig    String?
 }

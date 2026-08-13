@@ -5,7 +5,8 @@ import { Save, Loader2, Eye, EyeOff, CheckCircle, RefreshCw, AlertCircle } from 
 
 interface Props {
   initialUsername: string;
-  initialPassword: string;
+  /** Whether a password is stored — never the password itself (it stays server-side). */
+  initialHasPassword: boolean;
   initialAutoSync: boolean;
   initialLastSync: string | null;
 }
@@ -23,37 +24,53 @@ function formatSync(date: Date): string {
 }
 
 export default function SettingsForm({
-  initialUsername, initialPassword, initialAutoSync, initialLastSync,
+  initialUsername, initialHasPassword, initialAutoSync, initialLastSync,
 }: Props) {
   const [username, setUsername] = useState(initialUsername);
-  const [password, setPassword] = useState(initialPassword);
+  // The password field is write-only: it starts empty and we never receive the
+  // stored value. A blank field means "leave the saved password unchanged".
+  const [password, setPassword] = useState("");
   const [autoSync, setAutoSync] = useState(initialAutoSync);
   const [lastSync, setLastSync] = useState(initialLastSync);
   const [showPw, setShowPw]     = useState(false);
   const [saving, setSaving]     = useState(false);
   const [saved, setSaved]       = useState(false);
   const [saveErr, setSaveErr]   = useState<string | null>(null);
-  // What the server actually holds, not what's typed in the box.
-  const [storedPw, setStoredPw] = useState(!!initialPassword);
+  // Whether the server holds a password — reported by the API, never the value.
+  const [storedPw, setStoredPw] = useState(initialHasPassword);
 
   const [syncing, setSyncing]   = useState(false);
   const [syncMsg, setSyncMsg]   = useState<{ text: string; ok: boolean } | null>(null);
 
-  async function persist(next: { autoSyncOnStart?: boolean } = {}) {
+  async function persist(next: { autoSyncOnStart?: boolean; bggPassword?: string; clearBggPassword?: boolean } = {}) {
     const res = await fetch("/api/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         bggUsername: username.trim() || null,
-        bggPassword: password || null,
+        // Only send the password when the user typed one; blank = leave as-is.
+        ...(password ? { bggPassword: password } : {}),
         autoSyncOnStart: autoSync,
         ...next,
       }),
     });
     if (!res.ok) throw new Error(`Salvataggio fallito (${res.status})`);
     const data = await res.json();
-    setStoredPw(!!data.bggPassword);
+    setStoredPw(!!data.hasPassword);
     return data;
+  }
+
+  async function clearPassword() {
+    setSaving(true);
+    setSaveErr(null);
+    try {
+      await persist({ clearBggPassword: true });
+      setPassword("");
+    } catch (err) {
+      setSaveErr(err instanceof Error ? err.message : "Operazione fallita");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -63,6 +80,7 @@ export default function SettingsForm({
     setSaveErr(null);
     try {
       await persist();
+      setPassword("");          // back to the write-only empty state
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
@@ -134,7 +152,8 @@ export default function SettingsForm({
               value={password}
               onChange={e => setPassword(e.target.value)}
               className="w-full pr-9"
-              placeholder="••••••••"
+              placeholder={storedPw ? "•••••••• (salvata) — lascia vuoto per non cambiarla" : "••••••••"}
+              autoComplete="new-password"
             />
             <button type="button" onClick={() => setShowPw(v => !v)}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 btn-ghost p-0.5">
@@ -143,12 +162,20 @@ export default function SettingsForm({
                 : <Eye   size={14} style={{ color: "var(--text-muted)" }} />}
             </button>
           </div>
-          <p className="text-xs mt-1.5 flex items-center gap-1.5"
-            style={{ color: storedPw ? "#4ade80" : "var(--text-muted)" }}>
-            {storedPw
-              ? <><CheckCircle size={12} /> Password salvata nel database</>
-              : <><AlertCircle size={12} /> Nessuna password salvata — serve solo per scrivere su BGG</>}
-          </p>
+          <div className="flex items-center justify-between gap-2 mt-1.5">
+            <p className="text-xs flex items-center gap-1.5"
+              style={{ color: storedPw ? "#4ade80" : "var(--text-muted)" }}>
+              {storedPw
+                ? <><CheckCircle size={12} /> Password salvata (non viene mai mostrata)</>
+                : <><AlertCircle size={12} /> Nessuna password salvata — serve solo per scrivere su BGG</>}
+            </p>
+            {storedPw && (
+              <button type="button" onClick={clearPassword} disabled={saving}
+                className="btn-ghost text-xs flex-shrink-0" style={{ color: "var(--accent-red-light)" }}>
+                Rimuovi
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

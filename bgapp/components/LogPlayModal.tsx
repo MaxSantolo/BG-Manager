@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus, X, Loader2, CheckCircle, AlertCircle, Trophy, Search } from "lucide-react";
 import type { BggGameDetail } from "@/lib/bgg";
+import { apiFetch } from "@/lib/fetchClient";
 import PlayerPicker, { type PlayPlayer } from "./PlayerPicker";
 import PlacePicker from "./PlacePicker";
 
@@ -32,6 +33,7 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
   const [open, setOpen] = useState(false);
 
   const [gameId, setGameId]             = useState<number | "other" | "">(preselectedGame?.id ?? "");
+  const [gameQuery, setGameQuery]       = useState("");   // typeahead over the collection
   const [freeGameName, setFreeGameName] = useState("");
   const [bggQuery, setBggQuery]         = useState("");
   const [bggResults, setBggResults]     = useState<{ id: number; name: string; year?: number }[]>([]);
@@ -46,10 +48,20 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
   const [players, setPlayers]       = useState<PlayPlayer[]>([{ name: bggUsername ?? "", username: bggUsername ?? null, win: false, score: "" }]);
 
   const [saving, setSaving]     = useState(false);
-  const [result, setResult]     = useState<{ ok: boolean; msg: string } | null>(null);
+  // `done` = the local save succeeded (show "Fatto", never re-arm submit);
+  // `ok`   = fully clean (green). A local-only save is done-but-not-ok.
+  const [result, setResult]     = useState<{ ok: boolean; done: boolean; msg: string } | null>(null);
 
   const isOther      = gameId === "other";
-  const selectedGame = isOther ? null : games.find(g => g.id === gameId);
+  // On the game detail page the modal is opened with a preselectedGame and an
+  // empty games list, so resolve to it directly — otherwise the lookup misses,
+  // the name comes out empty, and the save is blocked.
+  const selectedGame = isOther ? null : (preselectedGame ?? games.find(g => g.id === gameId));
+
+  // Collection games matching what's typed — first-letters/substring, capped.
+  const gameMatches = gameQuery.trim()
+    ? games.filter(g => g.name.toLowerCase().includes(gameQuery.trim().toLowerCase())).slice(0, 8)
+    : [];
 
   async function searchBgg(q: string) {
     setBggQuery(q);
@@ -84,74 +96,91 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
     const resolvedName = isOther
       ? (bggPicked?.name ?? freeGameName.trim())
       : (selectedGame?.name ?? "");
-    if (!gameId || !resolvedName || !date) return;
+    if (!gameId || !resolvedName || !date) {
+      setResult({ ok: false, done: false, msg: "Seleziona un gioco e una data." });
+      return;
+    }
     setSaving(true);
     setResult(null);
 
-    // For external games: find-or-create via ensure-guest
-    let resolvedGameId: number | null = selectedGame?.id ?? null;
-    if (isOther && bggPicked) {
-      const gr = await fetch("/api/games/ensure-guest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bggId: bggPicked.id, name: bggPicked.name,
-          thumbnail: bggPicked.thumbnail, image: bggPicked.image,
-          bggRating: bggPicked.bggRating, bggWeight: bggPicked.bggWeight,
-          minPlayers: bggPicked.minPlayers, maxPlayers: bggPicked.maxPlayers,
-          playTime: bggPicked.playTime, yearPublished: bggPicked.yearPublished,
-        }),
+    try {
+      // For external games: find-or-create via ensure-guest.
+      let resolvedGameId: number | null = selectedGame?.id ?? null;
+      if (isOther && bggPicked) {
+        const gr = await apiFetch<{ id: number }>("/api/games/ensure-guest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bggId: bggPicked.id, name: bggPicked.name,
+            thumbnail: bggPicked.thumbnail, image: bggPicked.image,
+            bggRating: bggPicked.bggRating, bggWeight: bggPicked.bggWeight,
+            minPlayers: bggPicked.minPlayers, maxPlayers: bggPicked.maxPlayers,
+            playTime: bggPicked.playTime, yearPublished: bggPicked.yearPublished,
+          }),
+        });
+        if (gr.ok && gr.data) resolvedGameId = gr.data.id;
+      }
+
+      const playData = {
+        bggGameId: isOther ? (bggPicked?.id ?? null) : (selectedGame?.bggId ?? null),
+        date,
+        quantity:  parseInt(quantity) || 1,
+        duration:  duration ? parseInt(duration) : null,
+        location:  location || null,
+        notes:     notes || null,
+        incomplete,
+        players:   players.filter(p => p.name.trim()),
+      };
+
+      const res = await apiFetch<{ bgg?: { pushed?: boolean; pending?: boolean; error?: string } }>(
+        "/api/plays",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ gameName: resolvedName, gameId: resolvedGameId, ...playData }),
+        },
+      );
+
+      // The request took longer than the connection could hold. The play is
+      // saved locally first, server-side, so it almost certainly landed — say
+      // so and let "Fatto" reload, rather than inviting a duplicate re-submit.
+      if (res.timedOut) {
+        setResult({ ok: false, done: true, msg: "Salvataggio lento. La partita dovrebbe essere registrata: verifica nell'elenco." });
+        return;
+      }
+      if (res.networkError) {
+        setResult({ ok: false, done: false, msg: "Connessione assente. Riprova." });
+        return;
+      }
+      if (!res.ok) {
+        setResult({ ok: false, done: false, msg: "Errore salvataggio." });
+        return;
+      }
+      // Saved locally regardless; a failed BGG push is not a failed save, so
+      // this is `done` — the form must not re-arm and let the user duplicate it.
+      if (res.data?.bgg?.error) {
+        setResult({ ok: false, done: true, msg: `Registrata in locale, ma non su BGG: ${res.data.bgg.error}` });
+        return;
+      }
+      setResult({
+        ok: true,
+        done: true,
+        msg: res.data?.bgg?.pushed
+          ? "Partita registrata e caricata su BGG."
+          : res.data?.bgg?.pending
+            ? "Partita registrata. Sincronizzazione con BGG in corso."
+            : "Partita registrata.",
       });
-      if (gr.ok) { const gd = await gr.json(); resolvedGameId = gd.id; }
+    } finally {
+      setSaving(false);
     }
-
-    const playData = {
-      bggGameId: isOther ? (bggPicked?.id ?? null) : (selectedGame?.bggId ?? null),
-      date,
-      quantity:  parseInt(quantity) || 1,
-      duration:  duration ? parseInt(duration) : null,
-      location:  location || null,
-      notes:     notes || null,
-      incomplete,
-      players:   players.filter(p => p.name.trim()),
-    };
-
-    const res = await fetch("/api/plays", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        gameName: resolvedName,
-        gameId:   resolvedGameId,
-        ...playData,
-      }),
-    });
-
-    const data = await res.json().catch(() => ({}));
-    setSaving(false);
-
-    if (!res.ok) {
-      setResult({ ok: false, msg: "Errore salvataggio." });
-      return;
-    }
-    // The play is stored locally regardless; the BGG push can fail by itself.
-    if (data?.bgg?.error) {
-      setResult({ ok: false, msg: `Salvata in locale, ma non su BGG: ${data.bgg.error}` });
-      return;
-    }
-    setResult({
-      ok: true,
-      msg: data?.bgg?.pushed
-        ? "Partita registrata e caricata su BGG."
-        : data?.bgg?.pending
-          ? "Partita registrata. Sincronizzazione con BGG in corso."
-          : "Partita registrata.",
-    });
   }
 
   function close() {
     setOpen(false);
     setResult(null);
     setGameId(preselectedGame?.id ?? "");
+    setGameQuery("");
     setFreeGameName("");
     setBggQuery("");
     setBggResults([]);
@@ -200,19 +229,33 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
                 ) : (
                   <div className="space-y-2">
                     <Label>Gioco *</Label>
-                    <select
-                      value={isOther ? "other" : (gameId === "" ? "" : String(gameId))}
-                      onChange={e => {
-                        if (e.target.value === "other") { setGameId("other"); setFreeGameName(""); }
-                        else setGameId(e.target.value ? Number(e.target.value) : "");
-                      }}
-                      className="w-full" required>
-                      <option value="">Seleziona un gioco…</option>
-                      {games.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                      <option value="other">— Altro gioco (non in collezione) —</option>
-                    </select>
-                    {isOther && (
+
+                    {selectedGame && !isOther ? (
+                      /* A collection game is chosen — show it, with a way to change */
+                      <div className="flex items-center gap-2 p-2 rounded-lg"
+                        style={{ backgroundColor: "var(--bg-elevated)" }}>
+                        {selectedGame.thumbnail && (
+                          <img src={selectedGame.thumbnail} alt="" className="w-8 h-8 object-contain rounded flex-shrink-0" />
+                        )}
+                        <span className="flex-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                          {selectedGame.name}
+                        </span>
+                        <button type="button" onClick={() => { setGameId(""); setGameQuery(""); }}
+                          className="btn-ghost text-xs" style={{ color: "var(--text-muted)" }}>
+                          Cambia
+                        </button>
+                      </div>
+                    ) : isOther ? (
+                      /* Game not in the collection — search BGG or type a name */
                       <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs" style={{ color: "var(--text-muted)" }}>Gioco non in collezione</span>
+                          <button type="button"
+                            onClick={() => { setGameId(""); setBggPicked(null); setBggQuery(""); setFreeGameName(""); }}
+                            className="btn-ghost text-xs" style={{ color: "var(--accent-blue-light)" }}>
+                            ← Dalla collezione
+                          </button>
+                        </div>
                         {/* BGG search */}
                         <div className="relative">
                           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2"
@@ -230,7 +273,6 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
                               style={{ color: "var(--text-muted)" }} />
                           )}
                         </div>
-                        {/* BGG results dropdown */}
                         {bggResults.length > 0 && !bggPicked && (
                           <div className="rounded-lg overflow-hidden border text-sm"
                             style={{ borderColor: "var(--border)", backgroundColor: "var(--bg-elevated)" }}>
@@ -244,7 +286,6 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
                             ))}
                           </div>
                         )}
-                        {/* Picked BGG game or manual fallback */}
                         {bggPicked ? (
                           <div className="flex items-center gap-2 p-2 rounded-lg"
                             style={{ backgroundColor: "var(--bg-elevated)" }}>
@@ -266,6 +307,47 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
                           )
                         )}
                       </div>
+                    ) : (
+                      /* Typeahead over the collection */
+                      <>
+                        <div className="relative">
+                          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2"
+                            style={{ color: "var(--text-muted)" }} />
+                          <input
+                            type="text"
+                            value={gameQuery}
+                            onChange={e => setGameQuery(e.target.value)}
+                            placeholder="Cerca nella collezione…"
+                            className="w-full pl-8 text-sm"
+                            autoFocus
+                          />
+                        </div>
+                        {gameMatches.length > 0 && (
+                          <div className="rounded-lg overflow-hidden border text-sm max-h-56 overflow-y-auto"
+                            style={{ borderColor: "var(--border)", backgroundColor: "var(--bg-elevated)" }}>
+                            {gameMatches.map(g => (
+                              <button key={g.id} type="button"
+                                onClick={() => { setGameId(g.id); setGameQuery(""); }}
+                                className="w-full text-left px-3 py-1.5 hover:bg-white/5 flex items-center gap-2">
+                                {g.thumbnail
+                                  ? <img src={g.thumbnail} alt="" className="w-6 h-6 object-contain rounded flex-shrink-0" />
+                                  : <div className="w-6 h-6 rounded flex-shrink-0" style={{ backgroundColor: "var(--bg-card)" }} />}
+                                <span style={{ color: "var(--text-primary)" }}>{g.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {gameQuery.trim() && gameMatches.length === 0 && (
+                          <p className="text-xs px-1" style={{ color: "var(--text-muted)" }}>
+                            Nessun gioco in collezione corrisponde.
+                          </p>
+                        )}
+                        <button type="button"
+                          onClick={() => { setGameId("other"); setGameQuery(""); setFreeGameName(""); }}
+                          className="btn-ghost text-xs flex items-center gap-1" style={{ color: "var(--accent-blue-light)" }}>
+                          <Plus size={11} /> Gioco non in collezione (cerca su BGG)
+                        </button>
+                      </>
                     )}
                   </div>
                 )}
@@ -314,7 +396,7 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
               </div>
 
               <div className="flex gap-2 p-4 border-t" style={{ borderColor: "var(--border)" }}>
-                {result?.ok ? (
+                {result?.done ? (
                   <button type="button" onClick={() => { close(); window.location.reload(); }} className="btn-primary flex-1">
                     Fatto
                   </button>
