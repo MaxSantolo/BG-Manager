@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, X, Loader2, CheckCircle, AlertCircle, Trophy, Search } from "lucide-react";
 import type { BggGameDetail } from "@/lib/bgg";
 import { apiFetch } from "@/lib/fetchClient";
-import { asWinMode } from "@/lib/winner";
+import { asWinMode, WIN_MODES, type WinMode } from "@/lib/winner";
 import PlayerPicker, { type PlayPlayer } from "./PlayerPicker";
 import PlacePicker from "./PlacePicker";
 
@@ -59,8 +59,10 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
   // empty games list, so resolve to it directly — otherwise the lookup misses,
   // the name comes out empty, and the save is blocked.
   const selectedGame = isOther ? null : (preselectedGame ?? games.find(g => g.id === gameId));
-  // A game off the collection has no stored rule yet — default to "highest wins".
-  const winMode = asWinMode(selectedGame?.winMode);
+  // Editable here, but seeded from (and saved back to) the game's stored rule.
+  // A game off the collection has none yet — default to "highest wins".
+  const [winMode, setWinMode] = useState<WinMode>(asWinMode(preselectedGame?.winMode));
+  useEffect(() => { setWinMode(asWinMode(selectedGame?.winMode)); }, [selectedGame?.id, selectedGame?.winMode]);
 
   // Collection games matching what's typed — first-letters/substring, capped.
   const gameMatches = gameQuery.trim()
@@ -166,6 +168,14 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
         setResult({ ok: false, done: false, msg: "Errore salvataggio." });
         return;
       }
+      // Persist a changed win rule back onto the game (local-only field; doesn't
+      // affect the BGG push, which already carries the per-player win flags).
+      if (resolvedGameId && winMode !== asWinMode(selectedGame?.winMode)) {
+        await apiFetch(`/api/games/${resolvedGameId}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ winMode }),
+        });
+      }
       // Saved locally regardless; a failed BGG push is not a failed save, so
       // this is `done` — the form must not re-arm and let the user duplicate it.
       if (res.data?.bgg?.error) {
@@ -201,6 +211,7 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
     setLocation("");
     setNotes("");
     setIncomplete(false);
+    setWinMode(asWinMode(preselectedGame?.winMode));
     setPlayers([{ name: bggUsername ?? "", username: bggUsername ?? null, win: false, score: "" }]);
   }
 
@@ -384,6 +395,13 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
                     <Label>Luogo</Label>
                     <PlacePicker value={location} onChange={setLocation} />
                   </div>
+                </div>
+
+                <div>
+                  <Label>Modalità vittoria</Label>
+                  <select value={winMode} onChange={e => setWinMode(asWinMode(e.target.value))} className="w-full text-sm">
+                    {WIN_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  </select>
                 </div>
 
                 <PlayerPicker players={players} onChange={setPlayers} winMode={winMode} />

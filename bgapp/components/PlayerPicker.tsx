@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2, X, Loader2, UserPlus, AlertCircle } from "lucide-react";
 import { autoWinFlags, TEAMS, type WinMode } from "@/lib/winner";
 
@@ -114,6 +114,18 @@ export default function PlayerPicker({ players, onChange, winMode = "manual" }: 
   }
 
   const anyTeams = players.some(p => (p.team ?? "").trim() !== "");
+
+  // When the win rule itself changes (user switching it in the play modal),
+  // recompute the 🏆 from the current scores — but NOT on the first render, so
+  // opening an existing play keeps its stored winners untouched.
+  const prevMode = useRef(winMode);
+  useEffect(() => {
+    if (prevMode.current === winMode) return;
+    prevMode.current = winMode;
+    const flags = autoWinFlags(players, winMode);
+    if (flags) onChange(players.map((p, i) => ({ ...p, win: flags[i] })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [winMode]);
 
   function remove(i: number) {
     onChange(withAutoWins(players.filter((_, idx) => idx !== i)));

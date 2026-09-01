@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { prismaTx } from "@/lib/prismaTx";
-import { findBggConflict, isUniqueViolation } from "@/lib/dupCheck";
+import { findBggConflict, isUniqueViolation, isNotFound } from "@/lib/dupCheck";
+import { asWinMode } from "@/lib/winner";
 import {
   ensureCollectionItemOnBgg,
   updateCollectionStatusOnBgg,
@@ -174,6 +175,33 @@ export async function PUT(
   }
 
   return NextResponse.json({ ...gameWithSleeves, bgg });
+}
+
+/**
+ * Lightweight partial update for the winner rule only — used when the play modal
+ * changes "Modalità vittoria" so the choice sticks on the game. winMode is a
+ * LOCAL concept (BGG has no such field); it only decides which players get
+ * win=1 on a play, and that flag already round-trips to BGG unchanged.
+ */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const body = await req.json().catch(() => ({}));
+  if (typeof body?.winMode !== "string")
+    return NextResponse.json({ error: "winMode richiesto" }, { status: 400 });
+  try {
+    const game = await prisma.game.update({
+      where: { id: parseInt(id) },
+      data:  { winMode: asWinMode(body.winMode) },
+      select: { winMode: true },
+    });
+    return NextResponse.json(game);
+  } catch (err) {
+    if (isNotFound(err)) return NextResponse.json({ error: "Gioco non trovato" }, { status: 404 });
+    throw err;
+  }
 }
 
 export async function DELETE(

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Pencil, Trash2, X, Save, Loader2, AlertCircle } from "lucide-react";
 import { apiFetch } from "@/lib/fetchClient";
-import { asWinMode } from "@/lib/winner";
+import { asWinMode, WIN_MODES, type WinMode } from "@/lib/winner";
 import PlayerPicker, { type PlayPlayer } from "./PlayerPicker";
 import PlacePicker from "./PlacePicker";
 
@@ -18,6 +18,7 @@ interface Play {
   incomplete: boolean;
   gameName: string;
   players: string | null;
+  gameId?: number | null;
 }
 
 interface Props {
@@ -46,6 +47,7 @@ export default function EditPlayModal({ play, winMode }: Props) {
   const [players, setPlayers]     = useState<PlayPlayer[]>(() => {
     try { return play.players ? JSON.parse(play.players) : []; } catch { return []; }
   });
+  const [mode, setMode]           = useState<WinMode>(asWinMode(winMode));
   const [saving, setSaving]       = useState(false);
   const [deleting, setDeleting]   = useState(false);
   const [error, setError]         = useState<string | null>(null);
@@ -73,6 +75,14 @@ export default function EditPlayModal({ play, winMode }: Props) {
       }
       if (res.networkError) { setError("Connessione assente. Riprova."); return; }
       if (!res.ok) { setError("Errore durante il salvataggio."); return; }
+      // Persist a changed win rule back onto the game (local-only; the BGG push
+      // already carries the per-player win flags this rule produced).
+      if (play.gameId && mode !== asWinMode(winMode)) {
+        await apiFetch(`/api/games/${play.gameId}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ winMode: mode }),
+        });
+      }
       // Saved locally either way; only the BGG leg can fail on its own — surface
       // it but still close, since the edit itself succeeded.
       if (res.data?.bgg?.error) {
@@ -157,7 +167,14 @@ export default function EditPlayModal({ play, winMode }: Props) {
                   </div>
                 </div>
 
-                <PlayerPicker players={players} onChange={setPlayers} winMode={asWinMode(winMode)} />
+                <div>
+                  <Label>Modalità vittoria</Label>
+                  <select value={mode} onChange={e => setMode(asWinMode(e.target.value))} className="w-full text-sm">
+                    {WIN_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  </select>
+                </div>
+
+                <PlayerPicker players={players} onChange={setPlayers} winMode={mode} />
 
                 <div>
                   <Label>Note</Label>
