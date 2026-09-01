@@ -3,10 +3,15 @@ import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
+  const gameId = Number(body.gameId);
+  const borrower = typeof body.borrower === "string" ? body.borrower.trim() : "";
+  if (!Number.isInteger(gameId) || !borrower)
+    return NextResponse.json({ error: "gameId e borrower sono obbligatori" }, { status: 400 });
+
   const loan = await prisma.loan.create({
     data: {
-      gameId:   body.gameId,
-      borrower: body.borrower,
+      gameId,
+      borrower,
       loanDate: body.loanDate ? new Date(body.loanDate) : new Date(),
       notes:    body.notes ?? null,
     },

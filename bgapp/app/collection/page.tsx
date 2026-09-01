@@ -20,7 +20,7 @@ export default async function CollectionPage({
   searchParams: Promise<SearchParams>;
 }) {
   const { search = "", status = "", type = "", page = "1", limit: limitParam = "20", sort = "name_asc" } = await searchParams;
-  const pageNum = parseInt(page);
+  const pageNum = Math.max(1, parseInt(page) || 1);
   const limit   = [20, 40, 100].includes(parseInt(limitParam)) ? parseInt(limitParam) : 20;
   const skip    = (pageNum - 1) * limit;
 
@@ -52,7 +52,10 @@ export default async function CollectionPage({
       orderBy,
       skip,
       take: limit,
-      include: { gameSleeves: { include: { sleeve: true } } },
+      include: {
+        gameSleeves: { include: { sleeve: true } },
+        loans: { where: { returned: false }, select: { id: true } },
+      },
     }),
     prisma.game.count({ where }),
     prisma.game.count({ where: { bggId: { not: null }, OR: [{ thumbnail: null }, { description: null }] } }),

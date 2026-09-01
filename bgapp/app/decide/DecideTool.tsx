@@ -116,7 +116,7 @@ export default function DecideTool() {
 
   const games = result?.games ?? [];
   const unknown = result?.unknown;
-  const excluded = (unknown?.weight ?? 0) + (unknown?.time ?? 0);
+  const excluded = (unknown?.weight ?? 0) + (unknown?.time ?? 0) + (unknown?.players ?? 0);
 
   return (
     <div className="space-y-6">

@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/prisma";
+import { parseStatusConfig, labelFor } from "@/lib/status";
 import StatCards from "./StatCards";
 import Charts from "./Charts";
 
 export const dynamic = "force-dynamic";
 
 export default async function StatisticsPage() {
-  const [allGames, wishlistCount, sleeveUsageRaw, firstPlay] = await Promise.all([
+  const [allGames, wishlistCount, sleeveUsageRaw, firstPlay, settings] = await Promise.all([
     prisma.game.findMany(),
     prisma.wishlistGame.count(),
     prisma.gameSleeve.groupBy({
@@ -16,7 +17,10 @@ export default async function StatisticsPage() {
       take: 10,
     }),
     prisma.play.aggregate({ _min: { date: true } }),
+    prisma.settings.findUnique({ where: { id: 1 }, select: { statusConfig: true } }),
   ]);
+
+  const statusConfig = parseStatusConfig(settings?.statusConfig);
 
   const inCollection = allGames.filter((g) => g.status === "InCollezione");
   const forSale      = allGames.filter((g) => g.status === "InVendita");
@@ -53,12 +57,19 @@ export default async function StatisticsPage() {
     {} as Record<string, number>
   );
 
-  const byStatus = {
-    "In Collezione": inCollection.length,
-    "In Vendita":    forSale.length,
-    Preordinato:     preordered.length,
-    Venduto:         sold.length,
-  };
+  // Bucket by the CONFIGURED statuses (not the 4 hardcoded built-ins), so
+  // GiocatoEsterno and any custom status are counted and the chart reconciles
+  // with the total. Anything not in the config lands in "Altri".
+  const statusCounts = new Map<string, number>();
+  for (const g of allGames) statusCounts.set(g.status, (statusCounts.get(g.status) ?? 0) + 1);
+  const byStatus: Record<string, number> = {};
+  for (const s of statusConfig) {
+    const n = statusCounts.get(s.key) ?? 0;
+    if (n > 0) byStatus[labelFor(statusConfig, s.key)] = n;
+    statusCounts.delete(s.key);
+  }
+  const altri = [...statusCounts.values()].reduce((a, b) => a + b, 0);
+  if (altri > 0) byStatus["Altri"] = altri;
 
   const costByYear = buildCostByYear(allGames);
 

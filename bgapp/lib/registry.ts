@@ -14,6 +14,10 @@ export async function rebuildPlaces(): Promise<{ created: number; updated: numbe
     where: { location: { not: null } },
   });
 
+  // Zero every count first, so a place that lost all its plays doesn't keep a
+  // stale total (the loop below only touches places still present in history).
+  await prisma.place.updateMany({ data: { playCount: 0 } });
+
   let created = 0, updated = 0;
   for (const row of grouped) {
     const name = row.location?.trim();
@@ -86,6 +90,11 @@ export async function rebuildPlayers(): Promise<{ created: number; updated: numb
       username: prev?.username || info.username,
     });
   }
+
+  // Zero every count first: a player who lost all their plays (e.g. after a
+  // merge or delete) must not keep a stale total — the loop only touches players
+  // still present in history.
+  await prisma.player.updateMany({ data: { playCount: 0 } });
 
   let created = 0, updated = 0, avatars = 0;
   for (const [name, { count, username }] of folded) {

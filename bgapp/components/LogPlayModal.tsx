@@ -76,6 +76,8 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
       const res = await fetch(`/api/bgg?q=${encodeURIComponent(q)}`);
       const data = await res.json();
       setBggResults(Array.isArray(data) ? data : []);
+    } catch {
+      setBggResults([]);
     } finally {
       setBggSearching(false);
     }
@@ -87,9 +89,13 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
     try {
       const res = await fetch(`/api/bgg?id=${bggId}`);
       const detail: BggGameDetail = await res.json();
-      setBggPicked(detail);
-      setBggQuery(detail.name);
-      setFreeGameName(detail.name);
+      if (detail?.name) {
+        setBggPicked(detail);
+        setBggQuery(detail.name);
+        setFreeGameName(detail.name);
+      }
+    } catch {
+      // network/parse error — leave the search field as-is for a retry
     } finally {
       setBggSearching(false);
     }

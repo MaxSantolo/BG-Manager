@@ -93,7 +93,12 @@ export default function SettingsForm({
   async function toggleAutoSync() {
     const next = !autoSync;
     setAutoSync(next);
-    await persist({ autoSyncOnStart: next });
+    try {
+      await persist({ autoSyncOnStart: next });
+    } catch (err) {
+      setAutoSync(!next);   // revert the optimistic flip on failure
+      setSaveErr(err instanceof Error ? err.message : "Salvataggio fallito");
+    }
   }
 
   async function syncNow() {

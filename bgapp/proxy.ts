@@ -25,6 +25,13 @@ export async function proxy(request: NextRequest) {
 
   if (cookie?.value === expected) return NextResponse.next();
 
+  // API calls must get a real 401, not a 307 to the login HTML: a redirected GET
+  // returns 200 + HTML, res.json() throws, and apiFetch silently degrades to
+  // {ok:true, data:null}. A 401 lets the client detect the expired session.
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   const url = request.nextUrl.clone();
   url.pathname = "/login";
   return NextResponse.redirect(url);

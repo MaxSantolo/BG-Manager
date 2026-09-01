@@ -16,10 +16,10 @@ interface GameCardProps {
   salePrice: number | null;
   status: string;
   insert: string;
-  sleeves: string;
   thumbnail: string | null;
   bggRating: number | null;
   gameSleeves?: GameSleeve[];
+  loans?: { id: number }[];
   fromUrl?: string;
 }
 
@@ -32,10 +32,10 @@ export default function GameCard({
   salePrice,
   status,
   insert,
-  sleeves,
   thumbnail,
   bggRating,
   gameSleeves,
+  loans,
   fromUrl,
 }: GameCardProps) {
   return (
@@ -67,6 +67,7 @@ export default function GameCard({
         <div className="flex flex-wrap gap-2 mt-1 text-xs">
           <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800" style={{ color: "var(--text-secondary)" }}>{type}</span>
           <StatusBadge status={status} />
+          {loans && loans.length > 0 && <span className="badge bg-amber-900 text-amber-200">In prestito</span>}
           {cost != null && <span>Costo: €{cost.toFixed(2)}</span>}
           {salePrice != null && <span>Vendita: €{salePrice.toFixed(2)}</span>}
 {insert && <span>Inserto: {insert}</span>}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Search, Loader2, ExternalLink, X, AlertCircle, PenLine } from "lucide-react";
 import type { BggSearchResult, BggGameDetail } from "@/lib/bgg";
 
@@ -21,6 +21,10 @@ export default function BggSearch({ onSelect, selectedName, onClear, onUseAsName
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Cancel a pending debounce if the component unmounts (avoids a setState on
+  // an unmounted component when navigating away within the debounce window).
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
+
   async function search(q: string) {
     if (!q.trim()) { setResults([]); setOpen(false); return; }
     setLoading(true);
@@ -29,7 +33,7 @@ export default function BggSearch({ onSelect, selectedName, onClear, onUseAsName
       const res = await fetch(`/api/bgg?q=${encodeURIComponent(q)}`);
       if (!res.ok) throw new Error(`BGG error ${res.status}`);
       const data = await res.json();
-      setResults(data);
+      setResults(Array.isArray(data) ? data : []);
       setOpen(true);
     } catch {
       setError("Errore connessione BGG");

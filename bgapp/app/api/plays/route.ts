@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { savePlayToBgg, withBggTimeout, BggWriteError, BggTimeoutError } from "@/lib/bggWrite";
+import { savePlayToBgg, withBggTimeout, bggPushResult } from "@/lib/bggWrite";
 import { toBggDate, toBggPlayers } from "@/lib/playPayload";
 import { registerPlace } from "@/lib/registry";
 
@@ -70,10 +70,6 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     // The play is already saved locally; a slow/failed BGG push is reconciled
     // by the next sync, so this never blocks the user.
-    const pending = err instanceof BggTimeoutError;
-    return NextResponse.json(
-      { ...play, bgg: { pushed: false, pending, error: pending ? undefined : (err instanceof BggWriteError ? err.message : "Errore BGG") } },
-      { status: 201 }
-    );
+    return NextResponse.json({ ...play, bgg: bggPushResult(err) }, { status: 201 });
   }
 }

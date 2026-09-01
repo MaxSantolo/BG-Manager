@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { findBggConflict, isUniqueViolation } from "@/lib/dupCheck";
+import { findBggConflict, isUniqueViolation, isNotFound } from "@/lib/dupCheck";
 
 export async function GET(
   _request: NextRequest,
@@ -30,7 +30,7 @@ export async function PUT(
     game = await prisma.wishlistGame.update({
     where: { id: parseInt(id) },
     data: {
-      bggId: body.bggId ?? undefined,
+      bggId: body.bggId != null ? parseInt(body.bggId) : null,
       name: body.name,
       type: body.type,
       valueRange: body.valueRange ?? null,
@@ -55,6 +55,7 @@ export async function PUT(
     });
   } catch (err) {
     if (isUniqueViolation(err)) return NextResponse.json({ error: "duplicate" }, { status: 409 });
+    if (isNotFound(err)) return NextResponse.json({ error: "Not found" }, { status: 404 });
     throw err;
   }
   return NextResponse.json(game);
@@ -65,6 +66,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  await prisma.wishlistGame.delete({ where: { id: parseInt(id) } });
+  try {
+    await prisma.wishlistGame.delete({ where: { id: parseInt(id) } });
+  } catch (err) {
+    if (isNotFound(err)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    throw err;
+  }
   return NextResponse.json({ ok: true });
 }

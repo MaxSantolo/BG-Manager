@@ -23,8 +23,13 @@ export interface BggGameDetail {
 }
 
 const BGG_BASE = "https://boardgamegeek.com/xmlapi2";
-const BGG_TOKEN = process.env.BGG_API_KEY ?? "7a5e3d1c-353b-4afc-a49f-eec8173b92bd";
-export const bggHeaders = { Authorization: `Bearer ${BGG_TOKEN}` };
+// Read the token from the environment only — never bake a key into the bundle.
+// Without one we simply send no Authorization header (the xmlapi2 read endpoints
+// still answer unauthenticated for most calls).
+const BGG_TOKEN = process.env.BGG_API_KEY ?? "";
+export const bggHeaders: Record<string, string> = BGG_TOKEN
+  ? { Authorization: `Bearer ${BGG_TOKEN}` }
+  : {};
 
 // ── Search ────────────────────────────────────────────────────────────────────
 
@@ -151,7 +156,7 @@ export async function getBggUser(username: string): Promise<BggUserInfo> {
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
-function decodeXmlEntities(str: string): string {
+export function decodeXmlEntities(str: string): string {
   return str
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")

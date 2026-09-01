@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronLeft, ShoppingCart } from "lucide-react";
 import GameForm from "@/components/GameForm";
 import { parseStatusConfig } from "@/lib/status";
+import { isUniqueViolation } from "@/lib/dupCheck";
 
 export default async function WishlistDetailPage({
   params,
@@ -27,29 +28,58 @@ export default async function WishlistDetailPage({
     const purchaseDate = formData.get("purchaseDate") as string;
     const status = (formData.get("status") as string) || "InCollezione";
 
-    const newGame = await prisma.game.create({
-      data: {
-        bggId:         game!.bggId,
-        name:          game!.name,
-        type:          game!.type,
-        status,
-        insert:        game!.insert,
-        cost:          cost ? parseFloat(cost) : null,
-        purchaseDate:  purchaseDate ? new Date(purchaseDate) : new Date(),
-        thumbnail:     game!.thumbnail,
-        image:         game!.image,
-        description:   game!.description,
-        designers:     game!.designers,
-        mechanics:     game!.mechanics,
-        bggRating:     game!.bggRating,
-        bggWeight:     game!.bggWeight,
-        minPlayers:    game!.minPlayers,
-        maxPlayers:    game!.maxPlayers,
-        playTime:      game!.playTime,
-        yearPublished: game!.yearPublished,
-        notes:         game!.notes,
-      },
-    });
+    // If this game already sits in the collection (e.g. a sync created it while
+    // it was still on the wishlist), don't duplicate the bggId — drop the
+    // wishlist row and go to the existing game instead of crashing on the
+    // unique index.
+    if (game!.bggId) {
+      const existing = await prisma.game.findFirst({ where: { bggId: game!.bggId }, select: { id: true } });
+      if (existing) {
+        await prisma.wishlistGame.delete({ where: { id: game!.id } });
+        revalidatePath("/wishlist");
+        revalidatePath("/collection");
+        redirect(`/collection/${existing.id}`);
+      }
+    }
+
+    let newGame;
+    try {
+      newGame = await prisma.game.create({
+        data: {
+          bggId:         game!.bggId,
+          name:          game!.name,
+          type:          game!.type,
+          status,
+          insert:        game!.insert,
+          cost:          cost ? parseFloat(cost) : null,
+          purchaseDate:  purchaseDate ? new Date(purchaseDate) : new Date(),
+          thumbnail:     game!.thumbnail,
+          image:         game!.image,
+          description:   game!.description,
+          designers:     game!.designers,
+          mechanics:     game!.mechanics,
+          bggRating:     game!.bggRating,
+          bggWeight:     game!.bggWeight,
+          minPlayers:    game!.minPlayers,
+          maxPlayers:    game!.maxPlayers,
+          playTime:      game!.playTime,
+          yearPublished: game!.yearPublished,
+          notes:         game!.notes,
+        },
+      });
+    } catch (err) {
+      // Lost the race to a concurrent create of the same bggId — reuse it.
+      if (isUniqueViolation(err) && game!.bggId) {
+        const existing = await prisma.game.findFirst({ where: { bggId: game!.bggId }, select: { id: true } });
+        if (existing) {
+          await prisma.wishlistGame.delete({ where: { id: game!.id } }).catch(() => {});
+          revalidatePath("/wishlist");
+          revalidatePath("/collection");
+          redirect(`/collection/${existing.id}`);
+        }
+      }
+      throw err;
+    }
 
     await prisma.wishlistGame.delete({ where: { id: game!.id } });
     revalidatePath("/wishlist");

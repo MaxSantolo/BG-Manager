@@ -107,16 +107,25 @@ function YearBarChart({ data }: { data: YearData[] }) {
   );
 }
 
+const HASH_PALETTE = ["#2f6f4f", "#8a6d3b", "#5c3a5d", "#3a5d6f", "#6f3a3a", "#4a5d3a"];
+
 function statusColor(status: string) {
   const map: Record<string, string> = {
     InCollezione: "var(--accent-blue-light)",
     InVendita: "#b8860b",
     Preordinato: "#7b4fa6",
     Venduto: "var(--accent-red)",
+    GiocatoEsterno: "var(--text-muted)",
     "In Collezione": "var(--accent-blue-light)",
     "In Vendita": "#b8860b",
+    "Giocato (ospite)": "var(--text-muted)",
+    Altri: "var(--text-muted)",
   };
-  return map[status] ?? "var(--text-muted)";
+  if (map[status]) return map[status];
+  // Custom statuses (configurable) get a stable, distinct colour instead of grey.
+  let h = 0;
+  for (let i = 0; i < status.length; i++) h = (h * 31 + status.charCodeAt(i)) % 997;
+  return HASH_PALETTE[h % HASH_PALETTE.length];
 }
 
 export default function Charts({ byStatus, typeBreakdown, costByYear, topExpensive, topSleeves }: Props) {

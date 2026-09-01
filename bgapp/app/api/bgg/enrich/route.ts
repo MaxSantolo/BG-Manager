@@ -5,12 +5,12 @@ import { getBggGame } from "@/lib/bgg";
 export const maxDuration = 60;
 
 export async function POST() {
-  // Fetch all games with a bggId but missing thumbnail or description
+  // Enrich each game with a bggId exactly once: bggEnrichedAt marks "already
+  // fetched from BGG". Filtering on missing fields instead would re-fetch games
+  // that legitimately have no description/designers on BGG forever, never
+  // converging and burning API calls every run.
   const games = await prisma.game.findMany({
-    where: {
-      bggId: { not: null },
-      OR: [{ thumbnail: null }, { description: null }, { designers: "[]" }],
-    },
+    where: { bggId: { not: null }, bggEnrichedAt: null },
     select: { id: true, bggId: true },
     take: 50, // Process max 50 per call to stay within timeout
   });
@@ -51,10 +51,7 @@ export async function POST() {
 
   // Also enrich wishlist
   const wishes = await prisma.wishlistGame.findMany({
-    where: {
-      bggId: { not: null },
-      OR: [{ thumbnail: null }, { description: null }, { designers: "[]" }],
-    },
+    where: { bggId: { not: null }, bggEnrichedAt: null },
     select: { id: true, bggId: true },
     take: 20,
   });
@@ -89,10 +86,7 @@ export async function POST() {
   }
 
   const remaining = await prisma.game.count({
-    where: {
-      bggId: { not: null },
-      OR: [{ thumbnail: null }, { description: null }, { designers: "[]" }],
-    },
+    where: { bggId: { not: null }, bggEnrichedAt: null },
   });
 
   return NextResponse.json({ enriched, failed, remaining });

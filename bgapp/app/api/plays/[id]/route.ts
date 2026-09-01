@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { savePlayToBgg, deletePlayFromBgg, withBggTimeout, BggWriteError, BggTimeoutError } from "@/lib/bggWrite";
+import { savePlayToBgg, deletePlayFromBgg, withBggTimeout, BggWriteError, BggTimeoutError, bggPushResult } from "@/lib/bggWrite";
 import { toBggDate, toBggPlayers } from "@/lib/playPayload";
 import { registerPlace } from "@/lib/registry";
 
@@ -10,6 +10,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const body = await req.json();
   const { date, quantity, duration, location, notes, incomplete, gameName, players } = body;
+
+  if (!(await prisma.play.findUnique({ where: { id: parseInt(id) }, select: { id: true } })))
+    return NextResponse.json({ error: "Partita non trovata" }, { status: 404 });
 
   const play = await prisma.play.update({
     where: { id: parseInt(id) },
@@ -41,11 +44,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }));
     return NextResponse.json({ ...play, bgg: { pushed: true } });
   } catch (err) {
-    const pending = err instanceof BggTimeoutError;
-    return NextResponse.json({
-      ...play,
-      bgg: { pushed: false, pending, error: pending ? undefined : (err instanceof BggWriteError ? err.message : "Errore BGG") },
-    });
+    return NextResponse.json({ ...play, bgg: bggPushResult(err) });
   }
 }
 

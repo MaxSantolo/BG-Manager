@@ -34,3 +34,8 @@ export async function findBggConflict(
 export function isUniqueViolation(err: unknown): boolean {
   return !!err && typeof err === "object" && (err as { code?: string }).code === "P2002";
 }
+
+/** True when a thrown error is Prisma "record not found" (P2025), i.e. update/delete on a missing id. */
+export function isNotFound(err: unknown): boolean {
+  return !!err && typeof err === "object" && (err as { code?: string }).code === "P2025";
+}

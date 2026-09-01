@@ -58,23 +58,24 @@ export async function GET(req: NextRequest) {
     ...(withExpansions ? {} : { type: { not: "Espansione" } }),
     ...(players ? { minPlayers: { lte: players }, maxPlayers: { gte: players } } : {}),
   };
-  const unknown = {
-    weight: minWeight || maxWeight
-      ? await prisma.game.count({ where: { ...baseWhere, bggWeight: null } })
-      : 0,
-    time: minTime || maxTime
-      ? await prisma.game.count({ where: { ...baseWhere, playTime: null } })
-      : 0,
-    players: players
-      ? await prisma.game.count({
+  const [weightUnknown, timeUnknown, playersUnknown] = await Promise.all([
+    minWeight || maxWeight
+      ? prisma.game.count({ where: { ...baseWhere, bggWeight: null } })
+      : Promise.resolve(0),
+    minTime || maxTime
+      ? prisma.game.count({ where: { ...baseWhere, playTime: null } })
+      : Promise.resolve(0),
+    players
+      ? prisma.game.count({
           where: {
             status: "InCollezione",
             ...(withExpansions ? {} : { type: { not: "Espansione" } }),
             OR: [{ minPlayers: null }, { maxPlayers: null }],
           },
         })
-      : 0,
-  };
+      : Promise.resolve(0),
+  ]);
+  const unknown = { weight: weightUnknown, time: timeUnknown, players: playersUnknown };
 
   return NextResponse.json({ games, total: games.length, unknown });
 }

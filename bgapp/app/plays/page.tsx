@@ -20,7 +20,7 @@ function formatDate(date: Date): string {
 }
 
 export default async function PlaysPage() {
-  const [rawPlays, statPlays, topGames, settings, collectionGamesForLog] = await Promise.all([
+  const [rawPlays, statPlays, topGames, settings, collectionGamesForLog, collectionGames] = await Promise.all([
     prisma.play.findMany({
       orderBy: { date: "desc" },
       take: 100,
@@ -47,6 +47,8 @@ export default async function PlaysPage() {
       orderBy: { name: "asc" },
       select: { id: true, name: true, bggId: true, thumbnail: true, winMode: true },
     }),
+    // For linking each play/top-game to its collection page.
+    prisma.game.findMany({ where: { bggId: { not: null } }, select: { id: true, bggId: true } }),
   ]);
 
   // Stats — computed over the entire play history
@@ -57,10 +59,6 @@ export default async function PlaysPage() {
   const uniqueGames   = new Set(statPlays.map(p => p.bggGameId ?? p.gameName)).size;
 
   // Index collection games by bggId for links
-  const collectionGames = await prisma.game.findMany({
-    where: { bggId: { not: null } },
-    select: { id: true, bggId: true },
-  });
   const gameIdByBggId = new Map(collectionGames.map(g => [g.bggId!, g.id]));
 
   return (
@@ -150,7 +148,7 @@ export default async function PlaysPage() {
         {/* Play log */}
         <div className="card space-y-3 lg:col-span-2">
           <h2 className="text-sm font-semibold" style={{ color: "var(--text-secondary)" }}>
-            Ultime {Math.min(rawPlays.length, 100)} partite
+            Ultime {rawPlays.length} partite
           </h2>
           {rawPlays.length === 0 ? (
             <p className="text-sm" style={{ color: "var(--text-muted)" }}>

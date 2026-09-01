@@ -3,9 +3,16 @@ import { prisma } from "@/lib/prisma";
 import { prismaTx } from "@/lib/prismaTx";
 import { getBggGame } from "@/lib/bgg";
 import { findBggConflict, isUniqueViolation } from "@/lib/dupCheck";
-import { ensureCollectionItemOnBgg, withBggTimeout, BggWriteError, BggTimeoutError } from "@/lib/bggWrite";
+import { ensureCollectionItemOnBgg, withBggTimeout, bggPushResult } from "@/lib/bggWrite";
 
 export const maxDuration = 60;
+
+/** Parse a JSON-array string defensively; malformed input becomes []. */
+function safeJsonArray(v: unknown): unknown[] {
+  if (Array.isArray(v)) return v;
+  if (typeof v !== "string" || !v.trim()) return [];
+  try { const p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch { return []; }
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -88,15 +95,13 @@ export async function POST(request: NextRequest) {
         status:       body.status          || "InCollezione",
         winMode:      body.winMode          || "high",
         insert:       body.insert          || "No",
-        sleeves:      undefined, // campo legacy, non più usato
-        sleeveData:   undefined, // campo legacy, non più usato
         purchaseDate: body.purchaseDate    ? new Date(body.purchaseDate) : null,
         saleDate:     body.saleDate        ? new Date(body.saleDate) : null,
         thumbnail:    bggData?.thumbnail   || body.thumbnail   || null,
         image:        bggData?.image       || body.image       || null,
         description:  bggData?.description || body.description || null,
-        designers:    JSON.stringify(bggData?.designers ?? (body.designers ? JSON.parse(body.designers) : [])),
-        mechanics:    JSON.stringify(bggData?.mechanics ?? (body.mechanics ? JSON.parse(body.mechanics) : [])),
+        designers:    JSON.stringify(bggData?.designers ?? safeJsonArray(body.designers)),
+        mechanics:    JSON.stringify(bggData?.mechanics ?? safeJsonArray(body.mechanics)),
         bggRating:    bggData?.bggRating   ?? (body.bggRating != null ? parseFloat(body.bggRating) : null),
         bggWeight:    bggData?.bggWeight   ?? (body.bggWeight != null ? parseFloat(body.bggWeight) : null),
         minPlayers:   bggData?.minPlayers  ?? (body.minPlayers != null ? parseInt(body.minPlayers) : null),
@@ -141,8 +146,7 @@ export async function POST(request: NextRequest) {
       }
     } catch (err) {
       // Game is already saved locally; a slow BGG push is reconciled by sync.
-      const pending = err instanceof BggTimeoutError;
-      bgg = { pushed: false, pending, error: pending ? undefined : (err instanceof BggWriteError ? err.message : "Errore BGG") };
+      bgg = bggPushResult(err);
     }
   }
 

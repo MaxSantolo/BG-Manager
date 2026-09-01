@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { bggLogin } from "@/lib/bggAuth";
-import { bggHeaders } from "@/lib/bgg";
+import { bggHeaders, decodeXmlEntities } from "@/lib/bgg";
+import { isUniqueViolation } from "@/lib/dupCheck";
 import { classifyFlags, wishlistPriority, isWishlistStatus, parseStatusConfig, type StatusDef } from "@/lib/status";
 
 /**
@@ -22,11 +23,6 @@ export class BggSyncError extends Error {
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-
-function decodeHtml(s: string) {
-  return s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#x27;/g, "'").replace(/&#039;/g, "'");
-}
 
 export async function bggSession(username: string, password: string): Promise<string> {
   try {
@@ -81,7 +77,7 @@ function parseCollectionXml(xml: string, config: StatusDef[]): BggCollectionGame
     const subtype = attrs.match(/\bsubtype="([^"]+)"/)?.[1] ?? "boardgame";
     if (!bggId) continue;
 
-    const name = decodeHtml(body.match(/<name[^>]*sortindex[^>]*>([^<]+)<\/name>/)?.[1]?.trim() ?? "");
+    const name = decodeXmlEntities(body.match(/<name[^>]*sortindex[^>]*>([^<]+)<\/name>/)?.[1]?.trim() ?? "");
     if (!name) continue;
 
     // The configured statuses drive classification. A collection status wins;
@@ -204,25 +200,32 @@ export async function syncCollection(username: string, cookie?: string): Promise
       }
       continue;
     }
-    await prisma.game.create({
-      data: {
-        bggId:        g.bggId,
-        bggCollId:    g.collId,
-        name:         g.name,
-        type:         expansionIds.has(g.bggId) ? "Espansione" : subtypeToType(g.subtype),
-        status:       g.status!,
-        thumbnail:    g.thumbnail,
-        image:        g.image,
-        bggRating:    g.bggRating,
-        minPlayers:   g.minPlayers,
-        maxPlayers:   g.maxPlayers,
-        playTime:     g.playTime,
-        yearPublished: g.yearPublished,
-        designers:    "[]",
-        mechanics:    "[]",
-      },
-    });
-    imported++;
+    try {
+      await prisma.game.create({
+        data: {
+          bggId:        g.bggId,
+          bggCollId:    g.collId,
+          name:         g.name,
+          type:         expansionIds.has(g.bggId) ? "Espansione" : subtypeToType(g.subtype),
+          status:       g.status!,
+          thumbnail:    g.thumbnail,
+          image:        g.image,
+          bggRating:    g.bggRating,
+          minPlayers:   g.minPlayers,
+          maxPlayers:   g.maxPlayers,
+          playTime:     g.playTime,
+          yearPublished: g.yearPublished,
+          designers:    "[]",
+          mechanics:    "[]",
+        },
+      });
+      imported++;
+    } catch (err) {
+      // A concurrent sync (two tabs / manual + auto) may have just created the
+      // same bggId. The unique index rejects the duplicate — treat it as
+      // already-imported rather than aborting the whole sync with a 500.
+      if (!isUniqueViolation(err)) throw err;
+    }
   }
 
   const wishlistImported = await syncWishlist(wishlist, expansionIds);
@@ -251,24 +254,29 @@ async function syncWishlist(items: BggCollectionGame[], expansionIds: Set<number
   let created = 0;
   for (const g of items) {
     if (skip.has(g.bggId)) continue;
-    await prisma.wishlistGame.create({
-      data: {
-        bggId:        g.bggId,
-        name:         g.name,
-        type:         expansionIds.has(g.bggId) ? "Espansione" : subtypeToType(g.subtype),
-        desirability: 6 - (g.wishlistPriority ?? 3),
-        thumbnail:    g.thumbnail,
-        image:        g.image,
-        bggRating:    g.bggRating,
-        minPlayers:   g.minPlayers,
-        maxPlayers:   g.maxPlayers,
-        playTime:     g.playTime,
-        yearPublished: g.yearPublished,
-        designers:    "[]",
-        mechanics:    "[]",
-      },
-    });
-    created++;
+    try {
+      await prisma.wishlistGame.create({
+        data: {
+          bggId:        g.bggId,
+          name:         g.name,
+          type:         expansionIds.has(g.bggId) ? "Espansione" : subtypeToType(g.subtype),
+          desirability: 6 - (g.wishlistPriority ?? 3),
+          thumbnail:    g.thumbnail,
+          image:        g.image,
+          bggRating:    g.bggRating,
+          minPlayers:   g.minPlayers,
+          maxPlayers:   g.maxPlayers,
+          playTime:     g.playTime,
+          yearPublished: g.yearPublished,
+          designers:    "[]",
+          mechanics:    "[]",
+        },
+      });
+      created++;
+    } catch (err) {
+      // Concurrent sync already inserted this wishlist bggId — not fatal.
+      if (!isUniqueViolation(err)) throw err;
+    }
   }
   return created;
 }
@@ -302,7 +310,7 @@ function parsePlaysXml(xml: string): { total: number; plays: BggPlay[] } {
     if (!id) continue;
 
     const itemMatch = body.match(/<item\s[^>]*\bname="([^"]+)"[^>]*\bobjectid="(\d+)"/);
-    const gameName  = itemMatch ? decodeHtml(itemMatch[1]) : "";
+    const gameName  = itemMatch ? decodeXmlEntities(itemMatch[1]) : "";
     const bggGameId = itemMatch ? parseInt(itemMatch[2]) || null : null;
     const notes     = body.match(/<comments>([\s\S]*?)<\/comments>/)?.[1]?.trim() || null;
 

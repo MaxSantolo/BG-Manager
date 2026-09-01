@@ -146,7 +146,7 @@ export default function PlayerPicker({ players, onChange, winMode = "manual" }: 
         setErr(data.error ?? "Errore");
         return;
       }
-      setRegistry(prev => (prev.some(p => p.id === data.id) ? prev : [...prev, data]));
+      setRegistry(prev => (prev.some(p => p.id === data.id) ? prev : [...prev, { ...data, playCount: data.playCount ?? 0 }]));
       onChange(withAutoWins([...players, { name: data.name, username: data.bggUsername, score: "", win: false }]));
       setNewName(""); setNewUser(""); setCreating(false); setPicking(false);
     } catch {

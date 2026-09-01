@@ -77,11 +77,6 @@ export default function SleeveEditor({ value, onChange }: Props) {
                 onChange={(e) => updateSleeve(i, Number(e.target.value))}
                 className="w-44 text-sm"
               >
-                {sleeve && (
-                  <option value={sleeve.id}>
-                    {sleeve.size}{sleeve.label ? ` (${sleeve.label})` : ""}
-                  </option>
-                )}
                 {availableSleeves.concat(sleeve ? [sleeve] : []).map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.size}{s.label ? ` (${s.label})` : ""} — disp. {s.quantity}

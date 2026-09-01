@@ -23,10 +23,10 @@ interface Game {
   salePrice: number | null;
   status: string;
   insert: string;
-  sleeves: string;
   thumbnail: string | null;
   bggRating: number | null;
   gameSleeves?: GameSleeve[];
+  loans?: { id: number }[];
 }
 
 const PAGE_SIZES = [20, 40, 100];
@@ -224,7 +224,12 @@ export default function CollectionTable({
                   <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{game.type}</span>
                 </td>
                 <td>
-                  <StatusBadge status={game.status} />
+                  <div className="flex flex-wrap items-center gap-1">
+                    <StatusBadge status={game.status} />
+                    {game.loans && game.loans.length > 0 && (
+                      <span className="badge bg-amber-900 text-amber-200">In prestito</span>
+                    )}
+                  </div>
                 </td>
                 <td className="text-right text-sm">
                   {game.cost != null ? `€${game.cost.toFixed(2)}` : <span style={{ color: "var(--text-muted)" }}>—</span>}

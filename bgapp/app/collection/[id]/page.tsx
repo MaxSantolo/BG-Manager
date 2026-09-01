@@ -51,6 +51,9 @@ export default async function GameDetailPage({
           </h1>
           <div className="flex flex-wrap items-center gap-2 mt-1.5">
             <StatusBadge status={game.status} />
+            {game.loans.some(l => !l.returned) && (
+              <span className="badge bg-amber-900 text-amber-200">In prestito</span>
+            )}
             <span className="text-xs" style={{ color: "var(--text-muted)" }}>{game.type}</span>
             {game.yearPublished && (
               <span className="text-xs" style={{ color: "var(--text-muted)" }}>{game.yearPublished}</span>

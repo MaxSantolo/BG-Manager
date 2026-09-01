@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { DEFAULT_STATUSES, labelFor, colorFor, type StatusDef } from "@/lib/status";
+import { DEFAULT_STATUSES, type StatusDef } from "@/lib/status";
 
 /**
  * Makes the user-configured statuses available to client components (badges,
@@ -27,5 +27,3 @@ export function StatusProvider({ children }: { children: React.ReactNode }) {
 }
 
 export const useStatuses = () => useContext(StatusContext);
-export function useStatusLabel(key: string) { return labelFor(useContext(StatusContext), key); }
-export function useStatusColor(key: string) { return colorFor(useContext(StatusContext), key); }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Library, Heart, BarChart3, BookOpen, LogOut, Menu, Dice5, Trophy, Settings, Users } from "lucide-react";
+import { Library, Heart, BarChart3, BookOpen, Package, LogOut, Menu, Dice5, Trophy, Settings, Users } from "lucide-react";
 import { useState } from "react";
 
 const links = [
@@ -10,7 +10,8 @@ const links = [
   { href: "/decide", label: "Cosa giochiamo", icon: Dice5 },
   { href: "/wishlist", label: "Desiderata", icon: Heart },
   { href: "/plays", label: "Partite", icon: Trophy },
-  { href: "/sleeves", label: "Bustine", icon: BookOpen },
+  { href: "/prestiti", label: "Prestiti", icon: BookOpen },
+  { href: "/sleeves", label: "Bustine", icon: Package },
   { href: "/rubrica", label: "Rubrica", icon: Users },
   { href: "/statistics", label: "Statistiche", icon: BarChart3 },
 ];

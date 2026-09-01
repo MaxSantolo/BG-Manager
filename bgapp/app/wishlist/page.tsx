@@ -16,7 +16,7 @@ export default async function WishlistPage({
   const { search = "", type = "" } = await searchParams;
 
   const where: Record<string, unknown> = {};
-  if (search) where.name = { contains: search };
+  if (search) where.name = { contains: search, mode: "insensitive" };
   if (type) where.type = type;
 
   const games = await prisma.wishlistGame.findMany({

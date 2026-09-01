@@ -104,7 +104,9 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
       if (cancelled) return;
       if (colRes.ok) {
         const data = await colRes.json();
-        const hit = (data.games ?? []).find((g: { id: number }) => g.id !== id);
+        // Self-exclusion only applies when THIS form is editing that same
+        // collection game — a wishlist form's id lives in a different sequence.
+        const hit = (data.games ?? []).find((g: { id: number }) => !(!isWishlist && g.id === id));
         if (hit) { setDuplicate({ kind: "collection", id: hit.id, name: hit.name, status: hit.status }); return; }
       }
       if (wishRes.ok) {

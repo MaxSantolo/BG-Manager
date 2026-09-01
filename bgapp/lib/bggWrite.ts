@@ -44,6 +44,17 @@ export class BggNotConfiguredError extends BggWriteError {}
 export class BggTimeoutError extends BggWriteError {}
 
 /**
+ * Normalises a failed BGG push into the `bgg` field the routes return. The local
+ * write already committed, so a timeout is "pending" (sync will reconcile) and a
+ * missing-credentials case is NOT an error — it's simply a local-only save.
+ */
+export function bggPushResult(err: unknown): { pushed: false; pending?: boolean; error?: string } {
+  if (err instanceof BggTimeoutError) return { pushed: false, pending: true };
+  if (err instanceof BggNotConfiguredError) return { pushed: false };
+  return { pushed: false, error: err instanceof BggWriteError ? err.message : "Errore BGG" };
+}
+
+/**
  * Bounds a BGG operation so a slow phone connection can never hold a save open.
  * The local DB write has already committed by the time this runs, so on timeout
  * we abandon the push and let the next sync reconcile — the user's save is safe
@@ -168,7 +179,7 @@ async function loadStatusConfig(): Promise<StatusDef[]> {
 }
 
 /** app status key → BGG flags per the configured mapping, or null if unmapped. */
-export async function bggFlagsForStatus(status: string): Promise<Record<string, boolean> | null> {
+async function bggFlagsForStatus(status: string): Promise<Record<string, boolean> | null> {
   return flagsForStatus(await loadStatusConfig(), status);
 }
 

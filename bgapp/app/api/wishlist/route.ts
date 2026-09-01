@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   const bggId = searchParams.get("bggId");
 
   const where: Record<string, unknown> = {};
-  if (search) where.name = { contains: search };
+  if (search) where.name = { contains: search, mode: "insensitive" };
   if (type) where.type = type;
   if (bggId) where.bggId = parseInt(bggId);
 

@@ -31,7 +31,9 @@ export default async function Home() {
         orderBy: { name: "asc" },
         select: { id: true, name: true, thumbnail: true, cost: true, salePrice: true },
       }),
-      prisma.game.aggregate({ _sum: { cost: true } }),
+      // "Investito" = quanto hai speso: i giochi solo giocati come ospite non
+      // sono un acquisto, quindi restano fuori (i venduti sì, li avevi comprati).
+      prisma.game.aggregate({ _sum: { cost: true }, where: { NOT: { status: "GiocatoEsterno" } } }),
     ]);
 
   const totalInvested = aggregate._sum.cost ?? 0;
@@ -63,12 +65,12 @@ export default async function Home() {
           <p className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>€{totalInvested.toFixed(0)}</p>
           <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Investito</p>
         </div>
-        <div className="card text-center space-y-1">
+        <Link href="/prestiti" className="card text-center space-y-1" style={{ textDecoration: "none" }}>
           <BookOpen size={22} className="mx-auto"
             style={{ color: activeLoans > 0 ? "var(--accent-red-light)" : "var(--text-muted)" }} />
           <p className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>{activeLoans}</p>
           <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Prestiti attivi</p>
-        </div>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

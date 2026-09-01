@@ -70,8 +70,14 @@ export function parseStatusConfig(raw: string | null | undefined): StatusDef[] {
 /** BGG status attributes string → app status key, honouring import priority. */
 export function classifyFlags(config: StatusDef[], statusAttrs: string): string | null {
   const has = (flag: string) => new RegExp(`\\b${flag}="1"`).test(statusAttrs);
-  for (const s of config) {
-    if (s.bgg.length === 0) continue;              // e.g. GiocatoEsterno never matches import
+  // Match the most specific status first (more flags = more specific), so
+  // own+fortrade wins over own regardless of the array's order — a healed
+  // built-in appended at the end (parseStatusConfig) can't invert the priority.
+  // Ties keep the configured order (stable sort).
+  const candidates = [...config]
+    .filter(s => s.bgg.length > 0)                 // e.g. GiocatoEsterno never matches import
+    .sort((a, b) => b.bgg.length - a.bgg.length);
+  for (const s of candidates) {
     if (s.bgg.every(has)) return s.key;
   }
   return null;

@@ -71,11 +71,19 @@ export default function StatusConfigEditor() {
   async function save() {
     if (!rows) return;
     // Fill keys for any new rows from their label; keep built-in keys untouched.
-    const prepared = rows.map(r => ({
-      ...r,
-      key: r.builtin ? r.key : (r.key && r.key !== "Nuovo" ? r.key : slug(r.label)),
-      label: r.label.trim() || r.key,
-    }));
+    // Any auto-generated "Nuovo"/"Nuovo2"/… placeholder becomes a slug of the
+    // label, and keys are made unique (so two customs, or a custom colliding with
+    // a built-in, can't produce duplicate keys).
+    const seen = new Set(rows.filter(r => r.builtin).map(r => r.key));
+    const prepared = rows.map(r => {
+      if (r.builtin) return { ...r, label: r.label.trim() || r.key };
+      let key = r.key && !/^Nuovo\d*$/.test(r.key) ? r.key : slug(r.label);
+      const base = key;
+      let n = 1;
+      while (seen.has(key)) key = `${base}${++n}`;
+      seen.add(key);
+      return { ...r, key, label: r.label.trim() || r.key };
+    });
     setSaving(true); setSaved(false); setErr(null);
     const res = await apiFetch("/api/settings", {
       method: "PUT", headers: { "Content-Type": "application/json" },

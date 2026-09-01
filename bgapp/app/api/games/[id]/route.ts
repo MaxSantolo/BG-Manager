@@ -9,7 +9,7 @@ import {
   statusMapsToBgg,
   withBggTimeout,
   BggWriteError,
-  BggTimeoutError,
+  bggPushResult,
 } from "@/lib/bggWrite";
 
 export const maxDuration = 60;
@@ -105,7 +105,7 @@ export async function PUT(
     const updated = await tx.game.update({
       where: { id: parseInt(id) },
       data: {
-        bggId:        body.bggId          ?? undefined,
+        bggId:        newBggId,
         name:         body.name,
         type:         body.type,
         cost:         body.cost != null    ? parseFloat(body.cost) : null,
@@ -114,8 +114,6 @@ export async function PUT(
         winMode:      body.winMode ?? undefined,
         ...(relinked ? { bggCollId: null } : {}),
         insert:       body.insert,
-        sleeves:      undefined, // legacy
-        sleeveData:   undefined, // legacy
         purchaseDate: body.purchaseDate   ? new Date(body.purchaseDate) : null,
         saleDate:     body.saleDate       ? new Date(body.saleDate) : null,
         thumbnail:    body.thumbnail      ?? null,
@@ -171,8 +169,7 @@ export async function PUT(
       }
     } catch (err) {
       // Local update already committed; a slow BGG push is reconciled by sync.
-      const pending = err instanceof BggTimeoutError;
-      bgg = { pushed: false, pending, error: pending ? undefined : (err instanceof BggWriteError ? err.message : "Errore BGG") };
+      bgg = bggPushResult(err);
     }
   }
 
