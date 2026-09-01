@@ -28,6 +28,7 @@ export default async function PlaysPage() {
         id: true, date: true, quantity: true, duration: true,
         gameName: true, bggGameId: true, gameId: true,
         players: true, location: true, notes: true, incomplete: true,
+        game: { select: { winMode: true } },
       },
     }),
     // All plays (lightweight) — stats must cover the whole history, not just the last 100
@@ -44,7 +45,7 @@ export default async function PlaysPage() {
     prisma.game.findMany({
       where: { status: "InCollezione" },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, bggId: true, thumbnail: true },
+      select: { id: true, name: true, bggId: true, thumbnail: true, winMode: true },
     }),
   ]);
 
@@ -159,7 +160,7 @@ export default async function PlaysPage() {
             <div className="divide-y overflow-x-auto" style={{ borderColor: "var(--border)" }}>
               {rawPlays.map(play => {
                 const collId = play.gameId ?? (play.bggGameId ? gameIdByBggId.get(play.bggGameId) : null);
-                const parsedPlayers: { name: string; win: boolean; score: string }[] = play.players
+                const parsedPlayers: { name: string; win: boolean; score: string; team?: string }[] = play.players
                   ? (() => { try { return JSON.parse(play.players); } catch { return []; } })()
                   : [];
                 const winners = parsedPlayers.filter(p => p.win).map(p => p.name);
@@ -190,7 +191,7 @@ export default async function PlaysPage() {
                       )}
                       {parsedPlayers.length > 0 && (
                         <p className="text-xs mt-0.5 truncate" style={{ color: "var(--text-muted)" }}>
-                          {parsedPlayers.map(p => p.win ? `🏆 ${p.name}` : p.name).join(", ")}
+                          {parsedPlayers.map(p => `${p.win ? "🏆 " : ""}${p.name}${p.team ? ` [${p.team}]` : ""}`).join(", ")}
                         </p>
                       )}
                       {winners.length > 0 && parsedPlayers.length === 0 && (
@@ -201,7 +202,7 @@ export default async function PlaysPage() {
                       {play.quantity > 1 && (
                         <span className="text-xs" style={{ color: "var(--text-muted)" }}>×{play.quantity}</span>
                       )}
-                      <EditPlayModal play={play} />
+                      <EditPlayModal play={play} winMode={play.game?.winMode} />
                     </div>
                   </div>
                 );

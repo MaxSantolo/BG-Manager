@@ -19,6 +19,7 @@ export interface BggPlayPlayer {
   new?: boolean;
   rating?: number;
   startposition?: string | null;
+  team?: string | null;
 }
 
 export interface BggPlayInput {
@@ -132,6 +133,7 @@ export async function savePlayToBgg(input: BggPlayInput): Promise<number> {
       rating:        p.rating ?? 0,
       color:         p.color ?? "",
       startposition: p.startposition ?? "",
+      team:          p.team ?? "",
     })),
   });
 

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { ChevronLeft, ShoppingCart } from "lucide-react";
 import GameForm from "@/components/GameForm";
+import { parseStatusConfig } from "@/lib/status";
 
 export default async function WishlistDetailPage({
   params,
@@ -11,20 +12,27 @@ export default async function WishlistDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const game = await prisma.wishlistGame.findUnique({ where: { id: parseInt(id) } });
+  const [game, settings] = await Promise.all([
+    prisma.wishlistGame.findUnique({ where: { id: parseInt(id) } }),
+    prisma.settings.findUnique({ where: { id: 1 }, select: { statusConfig: true } }),
+  ]);
   if (!game) notFound();
+
+  // Statuses you can land on when buying: configured, form-visible ones.
+  const buyStatuses = parseStatusConfig(settings?.statusConfig).filter(s => !s.hidden);
 
   async function buyGame(formData: FormData) {
     "use server";
     const cost = formData.get("cost") as string;
     const purchaseDate = formData.get("purchaseDate") as string;
+    const status = (formData.get("status") as string) || "InCollezione";
 
     const newGame = await prisma.game.create({
       data: {
         bggId:         game!.bggId,
         name:          game!.name,
         type:          game!.type,
-        status:        "InCollezione",
+        status,
         insert:        game!.insert,
         cost:          cost ? parseFloat(cost) : null,
         purchaseDate:  purchaseDate ? new Date(purchaseDate) : new Date(),
@@ -69,6 +77,12 @@ export default async function WishlistDetailPage({
           </h2>
         </div>
         <form action={buyGame} className="flex flex-wrap gap-3 items-end">
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Stato</label>
+            <select name="status" defaultValue="InCollezione" className="text-sm">
+              {buyStatuses.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+            </select>
+          </div>
           <div>
             <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Costo (€)</label>
             <input name="cost" type="number" step="0.01" min="0" className="w-32 text-sm" placeholder="0.00" />

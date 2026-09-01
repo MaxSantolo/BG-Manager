@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { findBggConflict, isUniqueViolation } from "@/lib/dupCheck";
 
 export async function GET(
   _request: NextRequest,
@@ -17,7 +18,16 @@ export async function PUT(
 ) {
   const { id } = await params;
   const body = await request.json();
-  const game = await prisma.wishlistGame.update({
+
+  // Re-linking to a bggId owned elsewhere would break one-row-per-BGG-id.
+  if (body.bggId != null) {
+    const conflict = await findBggConflict(parseInt(body.bggId), { wishlistId: parseInt(id) });
+    if (conflict) return NextResponse.json({ error: "duplicate", existing: conflict }, { status: 409 });
+  }
+
+  let game;
+  try {
+    game = await prisma.wishlistGame.update({
     where: { id: parseInt(id) },
     data: {
       bggId: body.bggId ?? undefined,
@@ -42,7 +52,11 @@ export async function PUT(
       yearPublished: body.yearPublished != null ? parseInt(body.yearPublished) : null,
       notes: body.notes ?? null,
     },
-  });
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) return NextResponse.json({ error: "duplicate" }, { status: 409 });
+    throw err;
+  }
   return NextResponse.json(game);
 }
 

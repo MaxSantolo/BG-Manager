@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Pencil, Trash2, X, Save, Loader2, AlertCircle } from "lucide-react";
 import { apiFetch } from "@/lib/fetchClient";
+import { asWinMode } from "@/lib/winner";
 import PlayerPicker, { type PlayPlayer } from "./PlayerPicker";
 import PlacePicker from "./PlacePicker";
 
@@ -21,6 +22,8 @@ interface Play {
 
 interface Props {
   play: Play;
+  /** The game's winner rule; unknown games fall back to "highest wins". */
+  winMode?: string | null;
 }
 
 function toDateInput(d: Date | string) {
@@ -32,7 +35,7 @@ const Label = ({ children }: { children: React.ReactNode }) => (
     style={{ color: "var(--text-secondary)" }}>{children}</label>
 );
 
-export default function EditPlayModal({ play }: Props) {
+export default function EditPlayModal({ play, winMode }: Props) {
   const [open, setOpen]           = useState(false);
   const [date, setDate]           = useState(toDateInput(play.date));
   const [quantity, setQuantity]   = useState(String(play.quantity));
@@ -154,7 +157,7 @@ export default function EditPlayModal({ play }: Props) {
                   </div>
                 </div>
 
-                <PlayerPicker players={players} onChange={setPlayers} />
+                <PlayerPicker players={players} onChange={setPlayers} winMode={asWinMode(winMode)} />
 
                 <div>
                   <Label>Note</Label>

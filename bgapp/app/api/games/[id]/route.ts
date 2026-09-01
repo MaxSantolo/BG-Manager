@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { prismaTx } from "@/lib/prismaTx";
+import { findBggConflict, isUniqueViolation } from "@/lib/dupCheck";
 import {
   ensureCollectionItemOnBgg,
   updateCollectionStatusOnBgg,
@@ -80,6 +81,13 @@ export async function PUT(
   const newBggId = body.bggId != null ? parseInt(body.bggId) : null;
   const relinked = before != null && newBggId !== before.bggId;
 
+  // Re-linking to a bggId already owned by another game (or on the wishlist)
+  // would violate one-row-per-BGG-id — reject before writing.
+  if (relinked && newBggId != null) {
+    const conflict = await findBggConflict(newBggId, { collectionId: gameIdNum });
+    if (conflict) return NextResponse.json({ error: "duplicate", existing: conflict }, { status: 409 });
+  }
+
   // Stock deltas + the game update + the association rebuild are one atomic
   // unit, so a mid-sequence failure can't leave stock and associations out of
   // step. Runs on the WS-backed client (the HTTP one can't transact).
@@ -87,7 +95,9 @@ export async function PUT(
     ? (body.sleeves as { sleeveId: number; qty?: number }[])
     : null;
 
-  const game = await prismaTx.$transaction(async (tx) => {
+  let game;
+  try {
+    game = await prismaTx.$transaction(async (tx) => {
     for (const { id: sid, delta } of sleeveDeltas) {
       await tx.sleeve.update({ where: { id: sid }, data: { quantity: { decrement: delta } } });
     }
@@ -101,6 +111,7 @@ export async function PUT(
         cost:         body.cost != null    ? parseFloat(body.cost) : null,
         salePrice:    body.salePrice != null ? parseFloat(body.salePrice) : null,
         status:       body.status,
+        winMode:      body.winMode ?? undefined,
         ...(relinked ? { bggCollId: null } : {}),
         insert:       body.insert,
         sleeves:      undefined, // legacy
@@ -129,7 +140,11 @@ export async function PUT(
       }
     }
     return updated;
-  });
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) return NextResponse.json({ error: "duplicate" }, { status: 409 });
+    throw err;
+  }
 
   // Restituisci anche le bustine associate
   const gameWithSleeves = await prisma.game.findUnique({

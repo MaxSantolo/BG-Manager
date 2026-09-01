@@ -11,6 +11,7 @@ import type { BggGameDetail } from "@/lib/bgg";
 import { apiFetch } from "@/lib/fetchClient";
 import { useStatuses } from "@/components/StatusProvider";
 import { GAME_TYPES, INSERT_OPTIONS } from "@/lib/types";
+import { WIN_MODES, asWinMode } from "@/lib/winner";
 
 type Mode = "collection" | "wishlist";
 
@@ -64,6 +65,7 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
   const [name, setName]             = useState(String(initialData?.name ?? ""));
   const [type, setType]             = useState(String(initialData?.type ?? "Base"));
   const [status, setStatus]         = useState(String(initialData?.status ?? (isWishlist ? "" : "InCollezione")));
+  const [winMode, setWinMode]       = useState(asWinMode(initialData?.winMode as string | undefined));
   const [cost, setCost]             = useState(String(initialData?.cost ?? ""));
   const [salePrice, setSalePrice]   = useState(String(initialData?.salePrice ?? ""));
   const [insert, setInsert]         = useState(String(initialData?.insert ?? "No"));
@@ -163,6 +165,10 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) { show("Inserisci il nome del gioco.", "error"); return; }
+    if (duplicate) {
+      show(`Gioco già ${duplicate.kind === "collection" ? "in collezione" : "nella wishlist"}: apri la scheda esistente.`, "error");
+      return;
+    }
     setSaving(true);
 
     const payload: Record<string, unknown> = {
@@ -189,6 +195,7 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
       payload.status       = status || null;
     } else {
       payload.status       = status;
+      payload.winMode      = winMode;
       payload.cost         = cost || null;
       payload.salePrice    = salePrice || null;
       payload.purchaseDate = purchaseDate || null;
@@ -204,6 +211,8 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
       const res = await apiFetch<{
         bgg?: { pushed?: boolean; pending?: boolean; error?: string };
         insufficient?: { size: string; label: string | null; requested: number; available: number }[];
+        error?: string;
+        existing?: { kind: "collection" | "wishlist"; id: number; name: string };
       }>(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -219,7 +228,11 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
         return;
       }
       if (!res.ok) {
-        if (res.status === 409) {
+        if (res.status === 409 && res.data?.error === "duplicate") {
+          const ex = res.data.existing;
+          setDuplicate(ex ? { kind: ex.kind, id: ex.id, name: ex.name } : null);
+          show(ex ? `"${ex.name}" è già ${ex.kind === "collection" ? "in collezione" : "nella wishlist"}.` : "Gioco già presente.", "error");
+        } else if (res.status === 409) {
           const items = res.data?.insufficient ?? [];
           const detail = items.map(i => `${i.label || i.size}: servono ${i.requested}, disponibili ${i.available}`).join("; ");
           show(`Magazzino bustine insufficiente. ${detail}. Rifornisci dalla pagina Bustine.`, "error");
@@ -281,7 +294,8 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
             </Link>
             {duplicate.status && <span style={{ color: "var(--text-muted)" }}> · {duplicate.status}</span>}
             <span className="block text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-              Puoi aggiungerlo comunque (es. seconda copia) o annullare.
+              Un gioco collegato a BGG può esistere una sola volta: apri la scheda
+              esistente per modificarlo. Il salvataggio è bloccato.
             </span>
           </div>
         </div>
@@ -426,6 +440,12 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
                 </select>
               </div>
               <div>
+                <Label>Modalità vittoria</Label>
+                <select value={winMode} onChange={e => setWinMode(asWinMode(e.target.value))} className="w-full">
+                  {WIN_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+              </div>
+              <div>
                 <Label>Costo acquisto (€)</Label>
                 <input type="number" step="0.01" min="0" value={cost}
                   onChange={e => setCost(e.target.value)} className="w-full" placeholder="0.00" />
@@ -480,7 +500,7 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
 
       {/* ── Actions ── */}
       <div className="flex items-center gap-3">
-        <button type="submit" disabled={saving} className="btn-primary">
+        <button type="submit" disabled={saving || !!duplicate} className="btn-primary">
           {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
           {id ? "Salva modifiche" : "Aggiungi gioco"}
         </button>

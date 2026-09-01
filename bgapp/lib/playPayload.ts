@@ -13,6 +13,7 @@ interface FormPlayer {
   win?: boolean;
   color?: string | null;
   new?: boolean;
+  team?: string | null;
 }
 
 /**
@@ -30,5 +31,6 @@ export function toBggPlayers(players: unknown): BggPlayPlayer[] {
       win:      !!p.win,
       color:    p.color ?? "",
       new:      !!p.new,
+      team:     p.team ?? "",
     }));
 }

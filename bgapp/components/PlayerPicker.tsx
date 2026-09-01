@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { Plus, Trash2, X, Loader2, UserPlus, AlertCircle } from "lucide-react";
+import { autoWinFlags, TEAMS, type WinMode } from "@/lib/winner";
 
 export interface PlayPlayer {
   name: string;
   username?: string | null;
   score: string;
   win: boolean;
+  team?: string;
 }
 
 interface RegistryPlayer {
@@ -21,6 +23,8 @@ interface RegistryPlayer {
 interface Props {
   players: PlayPlayer[];
   onChange: (players: PlayPlayer[]) => void;
+  /** The game's rule for deciding the winner (drives the 🏆 behaviour). */
+  winMode?: WinMode;
 }
 
 /** Deterministic tint per name, so anonymous players still read as distinct. */
@@ -57,7 +61,7 @@ export function Avatar({ name, url, size = 26 }: { name: string; url?: string | 
   );
 }
 
-export default function PlayerPicker({ players, onChange }: Props) {
+export default function PlayerPicker({ players, onChange, winMode = "manual" }: Props) {
   const [registry, setRegistry] = useState<RegistryPlayer[]>([]);
   const [picking, setPicking]   = useState(false);
   const [creating, setCreating] = useState(false);
@@ -93,16 +97,35 @@ export default function PlayerPicker({ players, onChange }: Props) {
   const avatarFor = (p: PlayPlayer) =>
     registry.find(r => r.name === p.name)?.avatarUrl ?? null;
 
-  function update(i: number, patch: Partial<PlayPlayer>) {
-    onChange(players.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+  const auto = winMode === "high" || winMode === "low";
+
+  // For high/low, keep the 🏆 in sync with the scores as they're typed. Returns
+  // the list unchanged when no numeric score decides it yet (autoWinFlags null),
+  // so manual flags survive until a real score exists.
+  function withAutoWins(list: PlayPlayer[]): PlayPlayer[] {
+    const flags = autoWinFlags(list, winMode);
+    return flags ? list.map((p, i) => ({ ...p, win: flags[i] })) : list;
   }
 
+  function update(i: number, patch: Partial<PlayPlayer>) {
+    let next = players.map((p, idx) => (idx === i ? { ...p, ...patch } : p));
+    if ("score" in patch || "team" in patch) next = withAutoWins(next);
+    onChange(next);
+  }
+
+  const anyTeams = players.some(p => (p.team ?? "").trim() !== "");
+
   function remove(i: number) {
-    onChange(players.filter((_, idx) => idx !== i));
+    onChange(withAutoWins(players.filter((_, idx) => idx !== i)));
+  }
+
+  /** Cooperative games: everyone shares the outcome. */
+  function setAllWins(win: boolean) {
+    onChange(players.map(p => ({ ...p, win })));
   }
 
   function addFromRegistry(r: RegistryPlayer) {
-    onChange([...players, { name: r.name, username: r.bggUsername, score: "", win: false }]);
+    onChange(withAutoWins([...players, { name: r.name, username: r.bggUsername, score: "", win: false }]));
     setPicking(false);
   }
 
@@ -124,7 +147,7 @@ export default function PlayerPicker({ players, onChange }: Props) {
         return;
       }
       setRegistry(prev => (prev.some(p => p.id === data.id) ? prev : [...prev, data]));
-      onChange([...players, { name: data.name, username: data.bggUsername, score: "", win: false }]);
+      onChange(withAutoWins([...players, { name: data.name, username: data.bggUsername, score: "", win: false }]));
       setNewName(""); setNewUser(""); setCreating(false); setPicking(false);
     } catch {
       setErr("Errore di rete");
@@ -147,6 +170,36 @@ export default function PlayerPicker({ players, onChange }: Props) {
         </button>
       </div>
 
+      {auto && players.length > 0 && (
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+          🏆 automatico al {anyTeams ? "totale di squadra" : "punteggio"} più {winMode === "high" ? "alto" : "basso"}
+          {" "}(pareggio = più vincitori). Puoi forzarlo col trofeo.
+          {anyTeams && " Squadra = somma dei punteggi dei membri."}
+        </p>
+      )}
+
+      {winMode === "coop" && players.length > 0 && (
+        <div className="flex items-center gap-2 text-xs">
+          <span style={{ color: "var(--text-muted)" }}>Esito comune:</span>
+          <button type="button" onClick={() => setAllWins(true)}
+            className="px-2 py-1 rounded transition-colors"
+            style={{
+              backgroundColor: players.every(p => p.win) ? "var(--accent-red)" : "transparent",
+              border: "1px solid var(--border)", color: "var(--text-primary)",
+            }}>
+            🏆 Vittoria
+          </button>
+          <button type="button" onClick={() => setAllWins(false)}
+            className="px-2 py-1 rounded transition-colors"
+            style={{
+              backgroundColor: players.every(p => !p.win) ? "var(--bg-elevated)" : "transparent",
+              border: "1px solid var(--border)", color: "var(--text-secondary)",
+            }}>
+            Sconfitta
+          </button>
+        </div>
+      )}
+
       {/* current line-up */}
       <div className="space-y-2">
         {players.map((p, i) => (
@@ -158,18 +211,28 @@ export default function PlayerPicker({ players, onChange }: Props) {
             <input type="text" placeholder="Nome" value={p.name}
               onChange={e => update(i, { name: e.target.value })}
               className="flex-1 text-sm min-w-0" />
+            {winMode !== "coop" && (
+              <select value={p.team ?? ""} onChange={e => update(i, { team: e.target.value })}
+                title="Squadra" style={{ width: "48px" }} className="text-sm flex-shrink-0">
+                <option value="">—</option>
+                {TEAMS.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            )}
             <input type="text" placeholder="Punti" value={p.score}
               onChange={e => update(i, { score: e.target.value })}
-              style={{ width: "68px" }} className="text-sm" />
-            <button type="button" onClick={() => update(i, { win: !p.win })}
-              title="Vincitore"
-              className="flex-shrink-0 p-1.5 rounded transition-colors"
-              style={{
-                backgroundColor: p.win ? "var(--accent-red)" : "transparent",
-                border: "1px solid var(--border)",
-              }}>
-              🏆
-            </button>
+              style={{ width: "60px" }} className="text-sm flex-shrink-0" />
+            {winMode !== "coop" && (
+              <button type="button" onClick={() => update(i, { win: !p.win })}
+                title={auto ? "Vincitore (calcolato dai punti, clic per forzare)" : "Vincitore"}
+                className="flex-shrink-0 p-1.5 rounded transition-colors"
+                style={{
+                  backgroundColor: p.win ? "var(--accent-red)" : "transparent",
+                  border: "1px solid var(--border)",
+                  opacity: p.win ? 1 : 0.5,
+                }}>
+                🏆
+              </button>
+            )}
             <button type="button" onClick={() => remove(i)} className="btn-ghost p-1.5 flex-shrink-0">
               <Trash2 size={13} style={{ color: "var(--text-muted)" }} />
             </button>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { prismaTx } from "@/lib/prismaTx";
 import { getBggGame } from "@/lib/bgg";
+import { findBggConflict, isUniqueViolation } from "@/lib/dupCheck";
 import { ensureCollectionItemOnBgg, withBggTimeout, BggWriteError, BggTimeoutError } from "@/lib/bggWrite";
 
 export const maxDuration = 60;
@@ -32,6 +33,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
+
+  // One row per BGG id: reject a game already in the collection or on the
+  // wishlist. Manual games (no bggId) are exempt and may repeat.
+  if (body.bggId) {
+    const conflict = await findBggConflict(parseInt(body.bggId));
+    if (conflict) return NextResponse.json({ error: "duplicate", existing: conflict }, { status: 409 });
+  }
 
   // Pre-validate sleeve magazine before creating anything
   if (Array.isArray(body.sleeves) && body.sleeves.length > 0) {
@@ -67,7 +75,9 @@ export async function POST(request: NextRequest) {
     ? (body.sleeves as { sleeveId: number; qty?: number }[])
     : [];
 
-  const game = await prismaTx.$transaction(async (tx) => {
+  let game;
+  try {
+    game = await prismaTx.$transaction(async (tx) => {
     const created = await tx.game.create({
       data: {
         bggId:        body.bggId           ? parseInt(body.bggId) : null,
@@ -76,6 +86,7 @@ export async function POST(request: NextRequest) {
         cost:         body.cost != null    ? parseFloat(body.cost) : null,
         salePrice:    body.salePrice != null ? parseFloat(body.salePrice) : null,
         status:       body.status          || "InCollezione",
+        winMode:      body.winMode          || "high",
         insert:       body.insert          || "No",
         sleeves:      undefined, // campo legacy, non più usato
         sleeveData:   undefined, // campo legacy, non più usato
@@ -103,7 +114,13 @@ export async function POST(request: NextRequest) {
       await tx.sleeve.update({ where: { id: s.sleeveId }, data: { quantity: { decrement: qty } } });
     }
     return created;
-  });
+    });
+  } catch (err) {
+    // Lost a race against a concurrent insert of the same bggId (the partial
+    // unique index is the hard guarantee behind the pre-check above).
+    if (isUniqueViolation(err)) return NextResponse.json({ error: "duplicate" }, { status: 409 });
+    throw err;
+  }
 
   // Restituisci anche le bustine associate
   const gameWithSleeves = await prisma.game.findUnique({

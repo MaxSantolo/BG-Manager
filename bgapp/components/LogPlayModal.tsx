@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus, X, Loader2, CheckCircle, AlertCircle, Trophy, Search } from "lucide-react";
 import type { BggGameDetail } from "@/lib/bgg";
 import { apiFetch } from "@/lib/fetchClient";
+import { asWinMode } from "@/lib/winner";
 import PlayerPicker, { type PlayPlayer } from "./PlayerPicker";
 import PlacePicker from "./PlacePicker";
 
@@ -12,6 +13,7 @@ interface Game {
   name: string;
   bggId: number | null;
   thumbnail: string | null;
+  winMode?: string | null;
 }
 
 interface Props {
@@ -57,6 +59,8 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
   // empty games list, so resolve to it directly — otherwise the lookup misses,
   // the name comes out empty, and the save is blocked.
   const selectedGame = isOther ? null : (preselectedGame ?? games.find(g => g.id === gameId));
+  // A game off the collection has no stored rule yet — default to "highest wins".
+  const winMode = asWinMode(selectedGame?.winMode);
 
   // Collection games matching what's typed — first-letters/substring, capped.
   const gameMatches = gameQuery.trim()
@@ -376,7 +380,7 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
                   </div>
                 </div>
 
-                <PlayerPicker players={players} onChange={setPlayers} />
+                <PlayerPicker players={players} onChange={setPlayers} winMode={winMode} />
 
                 <div>
                   <Label>Note</Label>

@@ -165,7 +165,7 @@ export default async function GameDetailPage({
               </div>
               <LogPlayModal
                 games={[]}
-                preselectedGame={{ id: game.id, name: game.name, bggId: game.bggId, thumbnail: game.thumbnail }}
+                preselectedGame={{ id: game.id, name: game.name, bggId: game.bggId, thumbnail: game.thumbnail, winMode: game.winMode }}
                 bggUsername={settings?.bggUsername ?? ""}
               />
             </div>
@@ -175,7 +175,7 @@ export default async function GameDetailPage({
             ) : (
               <div className="divide-y" style={{ borderColor: "var(--border)" }}>
                 {plays.map(play => {
-                  const players: { name: string; win: boolean; score: string }[] =
+                  const players: { name: string; win: boolean; score: string; team?: string }[] =
                     play.players ? (() => { try { return JSON.parse(play.players); } catch { return []; } })() : [];
                   return (
                     <div key={play.id} className="flex items-start gap-3 py-2 first:pt-0 last:pb-0">
@@ -192,7 +192,7 @@ export default async function GameDetailPage({
                       <div className="flex-1 min-w-0">
                         {players.length > 0 && (
                           <p className="text-sm truncate" style={{ color: "var(--text-secondary)" }}>
-                            {players.map(p => p.win ? `🏆 ${p.name}` : p.name).join(", ")}
+                            {players.map(p => `${p.win ? "🏆 " : ""}${p.name}${p.team ? ` [${p.team}]` : ""}`).join(", ")}
                           </p>
                         )}
                         {play.location && (
@@ -208,7 +208,7 @@ export default async function GameDetailPage({
                       {play.quantity > 1 && (
                         <span className="text-xs flex-shrink-0" style={{ color: "var(--text-muted)" }}>×{play.quantity}</span>
                       )}
-                      <EditPlayModal play={play} />
+                      <EditPlayModal play={play} winMode={game.winMode} />
                     </div>
                   );
                 })}

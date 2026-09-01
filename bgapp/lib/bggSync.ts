@@ -285,7 +285,7 @@ interface BggPlay {
   incomplete: boolean;
   gameName: string;
   bggGameId: number | null;
-  players: { name: string; username: string; score: string; win: boolean; color: string }[];
+  players: { name: string; username: string; score: string; win: boolean; color: string; team: string }[];
 }
 
 function parsePlaysXml(xml: string): { total: number; plays: BggPlay[] } {
@@ -316,6 +316,7 @@ function parsePlaysXml(xml: string): { total: number; plays: BggPlay[] } {
         name, username: pa.match(/\busername="([^"]*)"/)?.[1] ?? "",
         score: pa.match(/\bscore="([^"]*)"/)?.[1] ?? "",
         win: /\bwin="1"/.test(pa), color: pa.match(/\bcolor="([^"]*)"/)?.[1] ?? "",
+        team: pa.match(/\bteam="([^"]*)"/)?.[1] ?? "",
       });
     }
 

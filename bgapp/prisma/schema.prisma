@@ -9,6 +9,8 @@ generator client {
 
 model Game {
   id            Int       @id @default(autoincrement())
+  /// Unique when set, enforced by a partial unique index (migration
+  /// 20260901000000_unique_bggid); NULL bggId (manual games) may repeat.
   bggId         Int?
   /// BGG's collection-entry id; the handle needed to write status back.
   bggCollId     Int?
@@ -17,6 +19,9 @@ model Game {
   cost          Float?
   salePrice     Float?
   status        String    @default("InCollezione")
+  /// How the winner of a play is decided: high|low (auto from scores),
+  /// coop (shared win/loss), manual (tick winners by hand). See lib/winner.ts.
+  winMode       String    @default("high")
   insert        String    @default("No")
   sleeves       String    @default("No")
   sleeveData    String    @default("[]") // TODO: remove after migrazione dati
@@ -47,6 +52,8 @@ model Game {
 
 model WishlistGame {
   id            Int      @id @default(autoincrement())
+  /// Unique when set, enforced by a partial unique index (migration
+  /// 20260901000000_unique_bggid); NULL bggId (manual games) may repeat.
   bggId         Int?
   name          String
   type          String   @default("Base")
