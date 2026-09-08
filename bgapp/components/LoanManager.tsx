@@ -53,9 +53,10 @@ export default function LoanManager({ gameId, initialLoans }: Props) {
   const history = loans.filter((l) => l.returned);
 
   const avatarFor = (name: string) => registry.find(r => r.name === name)?.avatarUrl ?? null;
-  const matches = borrower.trim()
-    ? registry.filter(r => r.name.toLowerCase().includes(borrower.trim().toLowerCase())).slice(0, 6)
-    : registry.slice(0, 6);
+  const matches = (borrower.trim()
+    ? registry.filter(r => r.name.toLowerCase().includes(borrower.trim().toLowerCase()))
+    : registry
+  ).slice(0, 30);
 
   async function addLoan() {
     if (!borrower.trim()) return;

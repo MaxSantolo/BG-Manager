@@ -55,7 +55,20 @@ export async function searchBgg(query: string): Promise<BggSearchResult[]> {
       });
     }
   }
-  return results.slice(0, 20);
+
+  // Rank by relevance so a short exact name (e.g. "ICE") floats to the top
+  // instead of being buried among the many titles that merely contain it —
+  // otherwise it can fall outside the result cap entirely.
+  const q = query.trim().toLowerCase();
+  const rank = (name: string) => {
+    const n = name.toLowerCase();
+    if (n === q) return 0;
+    if (n.startsWith(q)) return 1;
+    if (n.includes(q)) return 2;
+    return 3;
+  };
+  results.sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name));
+  return results.slice(0, 50);
 }
 
 // ── Game detail ───────────────────────────────────────────────────────────────

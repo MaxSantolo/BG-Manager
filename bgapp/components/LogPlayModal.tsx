@@ -64,10 +64,20 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
   const [winMode, setWinMode] = useState<WinMode>(asWinMode(preselectedGame?.winMode));
   useEffect(() => { setWinMode(asWinMode(selectedGame?.winMode)); }, [selectedGame?.id, selectedGame?.winMode]);
 
-  // Collection games matching what's typed — first-letters/substring, capped.
-  const gameMatches = gameQuery.trim()
-    ? games.filter(g => g.name.toLowerCase().includes(gameQuery.trim().toLowerCase())).slice(0, 8)
-    : [];
+  // Collection games matching what's typed, ranked so a short exact name (e.g.
+  // "ICE") comes first instead of being cut off; the list is scrollable.
+  const gameMatches = (() => {
+    const q = gameQuery.trim().toLowerCase();
+    if (!q) return [];
+    const rank = (name: string) => {
+      const n = name.toLowerCase();
+      return n === q ? 0 : n.startsWith(q) ? 1 : n.includes(q) ? 2 : 3;
+    };
+    return games
+      .filter(g => g.name.toLowerCase().includes(q))
+      .sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name))
+      .slice(0, 50);
+  })();
 
   async function searchBgg(q: string) {
     setBggQuery(q);
@@ -295,9 +305,9 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
                           )}
                         </div>
                         {bggResults.length > 0 && !bggPicked && (
-                          <div className="rounded-lg overflow-hidden border text-sm"
+                          <div className="rounded-lg overflow-hidden border text-sm max-h-64 overflow-y-auto"
                             style={{ borderColor: "var(--border)", backgroundColor: "var(--bg-elevated)" }}>
-                            {bggResults.slice(0, 8).map(r => (
+                            {bggResults.map(r => (
                               <button key={r.id} type="button"
                                 onClick={() => pickBggGame(r.id)}
                                 className="w-full text-left px-3 py-1.5 hover:bg-white/5 flex items-center justify-between gap-2">
