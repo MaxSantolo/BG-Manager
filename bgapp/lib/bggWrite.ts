@@ -89,7 +89,14 @@ async function credentials(): Promise<{ username: string; cookie: string }> {
   try {
     return { username, cookie: await bggLogin(username, password) };
   } catch (err: unknown) {
-    throw new BggWriteError(err instanceof Error ? err.message : "Login BGG fallito");
+    const msg = err instanceof Error ? err.message : "Login BGG fallito";
+    // BGG's login endpoints sit behind a Cloudflare challenge: a 403 here is NOT
+    // a credentials problem, so don't send the user chasing username/password.
+    if (msg.includes("(403)"))
+      throw new BggWriteError(
+        "Login BGG bloccato da Cloudflare. Incolla il cookie di sessione in Impostazioni → BoardGameGeek per pubblicare su BGG."
+      );
+    throw new BggWriteError(msg);
   }
 }
 
