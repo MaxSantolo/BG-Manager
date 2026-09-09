@@ -7,6 +7,8 @@ interface Props {
   initialUsername: string;
   /** Whether a password is stored — never the password itself (it stays server-side). */
   initialHasPassword: boolean;
+  /** Whether a pasted session cookie is stored — never the value. */
+  initialHasCookie: boolean;
   initialAutoSync: boolean;
   initialLastSync: string | null;
 }
@@ -24,12 +26,14 @@ function formatSync(date: Date): string {
 }
 
 export default function SettingsForm({
-  initialUsername, initialHasPassword, initialAutoSync, initialLastSync,
+  initialUsername, initialHasPassword, initialHasCookie, initialAutoSync, initialLastSync,
 }: Props) {
   const [username, setUsername] = useState(initialUsername);
   // The password field is write-only: it starts empty and we never receive the
   // stored value. A blank field means "leave the saved password unchanged".
   const [password, setPassword] = useState("");
+  const [cookie, setCookie]     = useState("");
+  const [storedCookie, setStoredCookie] = useState(initialHasCookie);
   const [autoSync, setAutoSync] = useState(initialAutoSync);
   const [lastSync, setLastSync] = useState(initialLastSync);
   const [showPw, setShowPw]     = useState(false);
@@ -42,14 +46,15 @@ export default function SettingsForm({
   const [syncing, setSyncing]   = useState(false);
   const [syncMsg, setSyncMsg]   = useState<{ text: string; ok: boolean } | null>(null);
 
-  async function persist(next: { autoSyncOnStart?: boolean; bggPassword?: string; clearBggPassword?: boolean } = {}) {
+  async function persist(next: { autoSyncOnStart?: boolean; bggPassword?: string; clearBggPassword?: boolean; bggCookie?: string; clearBggCookie?: boolean } = {}) {
     const res = await fetch("/api/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         bggUsername: username.trim() || null,
-        // Only send the password when the user typed one; blank = leave as-is.
+        // Only send the password/cookie when the user typed one; blank = leave as-is.
         ...(password ? { bggPassword: password } : {}),
+        ...(cookie ? { bggCookie: cookie } : {}),
         autoSyncOnStart: autoSync,
         ...next,
       }),
@@ -57,7 +62,21 @@ export default function SettingsForm({
     if (!res.ok) throw new Error(`Salvataggio fallito (${res.status})`);
     const data = await res.json();
     setStoredPw(!!data.hasPassword);
+    setStoredCookie(!!data.hasCookie);
     return data;
+  }
+
+  async function clearCookie() {
+    setSaving(true);
+    setSaveErr(null);
+    try {
+      await persist({ clearBggCookie: true });
+      setCookie("");
+    } catch (err) {
+      setSaveErr(err instanceof Error ? err.message : "Operazione fallita");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function clearPassword() {
@@ -81,6 +100,7 @@ export default function SettingsForm({
     try {
       await persist();
       setPassword("");          // back to the write-only empty state
+      setCookie("");
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
@@ -176,6 +196,38 @@ export default function SettingsForm({
             </p>
             {storedPw && (
               <button type="button" onClick={clearPassword} disabled={saving}
+                className="btn-ghost text-xs flex-shrink-0" style={{ color: "var(--accent-red-light)" }}>
+                Rimuovi
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <Label>Cookie di sessione BGG (per scrivere su BGG)</Label>
+          <textarea
+            value={cookie}
+            onChange={e => setCookie(e.target.value)}
+            rows={3}
+            className="w-full text-sm font-mono resize-none"
+            placeholder={storedCookie ? "•••••••• (salvato) — lascia vuoto per non cambiarlo" : "bggusername=…; bggpassword=…; SessionID=…"}
+          />
+          <p className="text-xs mt-1.5" style={{ color: "var(--text-muted)" }}>
+            Il login BGG è bloccato da Cloudflare, quindi per <strong>pubblicare</strong> partite e
+            stati su BGG serve incollare qui il cookie di una sessione già loggata: su boardgamegeek.com
+            (loggato) apri DevTools (F12) → scheda <strong>Network</strong> → clic su una richiesta a
+            boardgamegeek.com → copia il valore dell&apos;header <code>cookie</code> e incollalo qui.
+            La lettura (import) funziona comunque senza. Il cookie scade: se le scritture smettono, reincollalo.
+          </p>
+          <div className="flex items-center justify-between gap-2 mt-1.5">
+            <p className="text-xs flex items-center gap-1.5"
+              style={{ color: storedCookie ? "#4ade80" : "var(--text-muted)" }}>
+              {storedCookie
+                ? <><CheckCircle size={12} /> Cookie salvato (non viene mai mostrato)</>
+                : <><AlertCircle size={12} /> Nessun cookie — le scritture su BGG non sono attive</>}
+            </p>
+            {storedCookie && (
+              <button type="button" onClick={clearCookie} disabled={saving}
                 className="btn-ghost text-xs flex-shrink-0" style={{ color: "var(--accent-red-light)" }}>
                 Rimuovi
               </button>

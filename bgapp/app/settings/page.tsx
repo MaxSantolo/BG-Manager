@@ -24,6 +24,7 @@ export default async function SettingsPage() {
       <SettingsForm
         initialUsername={settings?.bggUsername ?? ""}
         initialHasPassword={!!settings?.bggPassword?.trim()}
+        initialHasCookie={!!settings?.bggCookie?.trim()}
         initialAutoSync={settings?.autoSyncOnStart ?? true}
         initialLastSync={lastSync}
       />

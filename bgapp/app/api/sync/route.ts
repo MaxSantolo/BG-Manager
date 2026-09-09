@@ -37,7 +37,10 @@ export async function POST(req: NextRequest) {
     // sync — fall back to key-only reads instead of losing the import too.
     let cookie: string | undefined;
     let loginFailed = false;
-    if (settings.bggPassword?.trim()) {
+    if (settings.bggCookie?.trim()) {
+      // A pasted browser cookie is the working write path (login is Cloudflare-blocked).
+      cookie = settings.bggCookie.trim();
+    } else if (settings.bggPassword?.trim()) {
       try {
         cookie = await bggSession(username, settings.bggPassword);
       } catch {

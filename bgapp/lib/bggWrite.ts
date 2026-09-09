@@ -74,9 +74,15 @@ export async function withBggTimeout<T>(op: Promise<T>, ms = 12000): Promise<T> 
 
 async function credentials(): Promise<{ username: string; cookie: string }> {
   const settings = await prisma.settings.findUnique({ where: { id: 1 } });
-  const username = settings?.bggUsername?.trim();
-  const password = settings?.bggPassword?.trim();
+  const username = settings?.bggUsername?.trim() ?? "";
 
+  // Preferred: a session cookie pasted from a logged-in browser. BGG's login
+  // endpoints are Cloudflare-challenged (no server-to-server login), but the
+  // write endpoints accept this cookie directly.
+  const stored = settings?.bggCookie?.trim();
+  if (stored) return { username, cookie: stored };
+
+  const password = settings?.bggPassword?.trim();
   if (!username || !password)
     throw new BggNotConfiguredError("Credenziali BGG non configurate: salvato solo in locale.");
 

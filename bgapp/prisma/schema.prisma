@@ -173,6 +173,10 @@ model Settings {
   id              Int       @id @default(autoincrement())
   bggUsername     String?
   bggPassword     String?
+  /// Session cookie pasted from a logged-in browser. BGG's login endpoints are
+  /// Cloudflare-challenged (no server-to-server login), but the write endpoints
+  /// aren't — so writes use this cookie directly. Falls back to login otherwise.
+  bggCookie       String?
   autoSyncOnStart Boolean   @default(true)
   lastSyncAt      DateTime?
   /// JSON array of status definitions (label/color/BGG-flag mapping). Null = use

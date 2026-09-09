@@ -5,6 +5,7 @@ import { parseStatusConfig } from "@/lib/status";
 type SettingsRow = {
   bggUsername: string | null;
   bggPassword: string | null;
+  bggCookie: string | null;
   autoSyncOnStart: boolean;
   lastSyncAt: Date | null;
   statusConfig: string | null;
@@ -19,6 +20,7 @@ function publicSettings(s: SettingsRow | null) {
   return {
     bggUsername: s?.bggUsername ?? null,
     hasPassword: !!s?.bggPassword?.trim(),
+    hasCookie: !!s?.bggCookie?.trim(),
     autoSyncOnStart: s?.autoSyncOnStart ?? true,
     lastSyncAt: s?.lastSyncAt ?? null,
     statusConfig: parseStatusConfig(s?.statusConfig),
@@ -44,6 +46,11 @@ export async function PUT(req: NextRequest) {
   if (body.clearBggPassword === true) bggPassword = null;
   else if (typeof body.bggPassword === "string" && body.bggPassword.trim()) bggPassword = body.bggPassword.trim();
 
+  // Same write-only semantics for the pasted session cookie.
+  let bggCookie: string | null | undefined = undefined;
+  if (body.clearBggCookie === true) bggCookie = null;
+  else if (typeof body.bggCookie === "string" && body.bggCookie.trim()) bggCookie = body.bggCookie.trim();
+
   // Status config: sanitised through parseStatusConfig (which heals bad shapes
   // and guarantees the built-in keys survive), then stored as JSON. Omitted =
   // leave unchanged.
@@ -57,6 +64,7 @@ export async function PUT(req: NextRequest) {
       id: 1,
       bggUsername: bggUsername ?? null,
       bggPassword: bggPassword ?? null,
+      bggCookie: bggCookie ?? null,
       autoSyncOnStart: autoSync ?? true,
       statusConfig: statusConfig ?? null,
     },
@@ -64,6 +72,7 @@ export async function PUT(req: NextRequest) {
       // undefined tells Prisma to leave the column untouched.
       bggUsername,
       bggPassword,
+      bggCookie,
       autoSyncOnStart: autoSync,
       statusConfig,
     },
