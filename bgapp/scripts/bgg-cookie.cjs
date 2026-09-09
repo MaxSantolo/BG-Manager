@@ -115,6 +115,12 @@ function rpc(ws) {
   const { cookies } = await send("Network.getAllCookies", {}, sessionId);
   const bgg = cookies.filter((c) => (c.domain || "").includes("boardgamegeek.com"));
   console.log("cookie trovati:", bgg.map((c) => c.name).join(", ") || "(nessuno)");
+  for (const c of bgg) {
+    const exp = c.expires && c.expires > 0
+      ? `${new Date(c.expires * 1000).toISOString().slice(0, 10)} (~${Math.round((c.expires * 1000 - Date.now()) / 86400000)} giorni)`
+      : "sessione (scade chiudendo il browser)";
+    console.log(`  - ${c.name}: scadenza ${exp} | httpOnly=${c.httpOnly} | secure=${c.secure}`);
+  }
 
   const cookieStr = bgg.map((c) => `${c.name}=${c.value}`).join("; ");
   const hasAuth = bgg.some((c) => c.name === "bggpassword") && bgg.some((c) => c.name === "bggusername");
