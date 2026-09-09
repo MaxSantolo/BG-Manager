@@ -13,7 +13,9 @@ async function tokenFor(password: string): Promise<string> {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
+  // /api/bgg-cookie guards itself with its own bearer token (it's called by the
+  // scheduled refresher, which has no app password) — see that route.
+  if (pathname.startsWith("/login") || pathname.startsWith("/api/auth") || pathname.startsWith("/api/bgg-cookie")) {
     return NextResponse.next();
   }
 

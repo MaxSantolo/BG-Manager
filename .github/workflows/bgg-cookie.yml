@@ -1,0 +1,48 @@
+name: Rinnova cookie BGG
+
+# Il cookie di sessione BGG (bggusername/bggpassword) scade ogni ~30 giorni e
+# può essere rinnovato solo da un browser vero: gli endpoint di login di BGG
+# sono dietro una challenge Cloudflare. Questo job fa il login in Chrome e manda
+# il cookie all'app tramite un endpoint dedicato — nessuna credenziale del
+# database è coinvolta.
+#
+# Rete di sicurezza per quando il Mac resta spento: normalmente ci pensa il job
+# launchd locale (com.bgmanager.bggcookie).
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"      # ogni lunedì 06:00 UTC
+  workflow_dispatch:          # esecuzione manuale per provarlo
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: browser-actions/setup-chrome@v1
+        id: chrome
+        with:
+          chrome-version: stable
+
+      # --ignore-scripts: servono solo ws/dotenv/@neondatabase, non le build
+      # native (better-sqlite3) né il postinstall di Prisma.
+      - name: Installa dipendenze
+        working-directory: bgapp
+        run: npm ci --ignore-scripts
+
+      - name: Rinnova il cookie
+        working-directory: bgapp
+        env:
+          BGG_USERNAME: ${{ secrets.BGG_USERNAME }}
+          BGG_PASSWORD: ${{ secrets.BGG_PASSWORD }}
+          BGG_COOKIE_ENDPOINT: ${{ secrets.BGG_COOKIE_ENDPOINT }}
+          BGG_COOKIE_TOKEN: ${{ secrets.BGG_COOKIE_TOKEN }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+          BGG_HEADLESS: "1"
+        run: node scripts/bgg-cookie.cjs

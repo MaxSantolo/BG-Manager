@@ -60,13 +60,34 @@ function rpc(ws) {
     });
 }
 
+/**
+ * Two ways to run:
+ *  - locally (launchd): DATABASE_URL set → credentials read from Settings, the
+ *    refreshed cookie written straight back to the DB;
+ *  - from CI: BGG_USERNAME/BGG_PASSWORD + BGG_COOKIE_ENDPOINT/BGG_COOKIE_TOKEN →
+ *    no database credential involved, the cookie is POSTed to the app instead.
+ */
 (async () => {
-  const sql = neon(process.env.DATABASE_URL);
-  const row = (await sql`SELECT "bggUsername", "bggPassword" FROM "Settings" WHERE id=1`)[0] || {};
-  const username = (row.bggUsername || "").trim();
-  const password = (row.bggPassword || "").trim();
+  const endpoint = (process.env.BGG_COOKIE_ENDPOINT || "").trim();
+  const endpointToken = (process.env.BGG_COOKIE_TOKEN || "").trim();
+  const useEndpoint = !!(endpoint && endpointToken);
+
+  let username = (process.env.BGG_USERNAME || "").trim();
+  let password = (process.env.BGG_PASSWORD || "").trim();
+  let sql = null;
+
+  if (!username || !password) {
+    if (!process.env.DATABASE_URL) { console.log("NO_CREDENTIALS"); process.exit(1); }
+    sql = neon(process.env.DATABASE_URL);
+    const row = (await sql`SELECT "bggUsername", "bggPassword" FROM "Settings" WHERE id=1`)[0] || {};
+    username = (row.bggUsername || "").trim();
+    password = (row.bggPassword || "").trim();
+    console.log("credenziali dal DB: utente", username, "| password presente:", !!password);
+  } else {
+    console.log("credenziali da env: utente", username);
+  }
   if (!username || !password) { console.log("NO_CREDENTIALS"); process.exit(1); }
-  console.log("credenziali dal DB: utente", username, "| password presente:", !!password);
+  console.log("destinazione cookie:", useEndpoint ? "endpoint app" : "database");
 
   const CHROME = findChrome();
   console.log("chrome:", CHROME, "| headless:", HEADLESS);
@@ -154,16 +175,29 @@ function rpc(ws) {
   const hasAuth = bgg.some((c) => c.name === "bggpassword") && bgg.some((c) => c.name === "bggusername");
   console.log("contiene bggusername+bggpassword:", hasAuth, "| lunghezza stringa:", cookieStr.length);
 
-  if (hasAuth) {
-    await sql`UPDATE "Settings" SET "bggCookie" = ${cookieStr} WHERE id = 1`;
-    console.log("SALVATO_NEL_DB");
-  } else {
+  let saved = false;
+  if (!hasAuth) {
     console.log("NON_SALVATO: manca il cookie di autenticazione");
+  } else if (useEndpoint) {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${endpointToken}` },
+      body: JSON.stringify({ cookie: cookieStr }),
+    });
+    const txt = await res.text();
+    console.log("POST endpoint ->", res.status, txt.slice(0, 120));
+    saved = res.ok;
+    console.log(saved ? "SALVATO_VIA_ENDPOINT" : "NON_SALVATO: endpoint ha rifiutato");
+  } else {
+    if (!sql) sql = neon(process.env.DATABASE_URL);
+    await sql`UPDATE "Settings" SET "bggCookie" = ${cookieStr} WHERE id = 1`;
+    saved = true;
+    console.log("SALVATO_NEL_DB");
   }
 
   ws.close();
   chrome.kill();
   await sleep(500);
   try { fs.rmSync(profile, { recursive: true, force: true }); } catch {}
-  process.exit(0);
+  process.exit(saved ? 0 : 1);   // non-zero so a scheduled run reports failure
 })().catch((e) => { console.error("ERR", e.message); process.exit(1); });
