@@ -31,9 +31,19 @@ export async function POST(req: NextRequest) {
   const username = settings.bggUsername.trim();
 
   try {
-    const cookie     = settings.bggPassword?.trim()
-      ? await bggSession(username, settings.bggPassword)
-      : undefined;
+    // The session cookie is only needed for WRITES; reads work with the API key
+    // alone. BGG's login/api/v1 is currently behind a Cloudflare challenge that
+    // rejects server-to-server calls, so a failed login must NOT abort the whole
+    // sync — fall back to key-only reads instead of losing the import too.
+    let cookie: string | undefined;
+    let loginFailed = false;
+    if (settings.bggPassword?.trim()) {
+      try {
+        cookie = await bggSession(username, settings.bggPassword);
+      } catch {
+        loginFailed = true;
+      }
+    }
     const collection = await syncCollection(username, cookie);
     const plays      = await syncPlays(username, cookie);
 
@@ -53,6 +63,7 @@ export async function POST(req: NextRequest) {
       games:      collection,
       plays,
       lastSyncAt: updated.lastSyncAt,
+      loginFailed,
     });
   } catch (err: unknown) {
     if (err instanceof BggSyncError)

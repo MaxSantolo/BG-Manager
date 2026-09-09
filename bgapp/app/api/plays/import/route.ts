@@ -10,8 +10,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const user   = username.trim();
-    // The API key covers reads; a password just adds a session cookie.
-    const cookie = password?.trim() ? await bggSession(user, password) : undefined;
+    // Reads work with the API key alone; the cookie is only for writes. A blocked
+    // BGG login (Cloudflare) must not abort the read import — fall back to no cookie.
+    let cookie: string | undefined;
+    if (password?.trim()) {
+      try { cookie = await bggSession(user, password); } catch { cookie = undefined; }
+    }
     const result = await syncPlays(user, cookie);
 
     await prisma.settings.upsert({

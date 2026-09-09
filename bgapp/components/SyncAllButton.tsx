@@ -21,7 +21,7 @@ export default function SyncAllButton() {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 90000);
       let data: {
-        skipped?: string; error?: string;
+        skipped?: string; error?: string; loginFailed?: boolean;
         games?: { imported: number; enriched: number; statusChanged: number; wishlistImported: number };
         plays?: { imported: number };
       } = {};
@@ -46,7 +46,12 @@ export default function SyncAllButton() {
       if (data.games?.statusChanged)   parts.push(`${data.games.statusChanged} stati`);
       if (data.games?.wishlistImported)parts.push(`${data.games.wishlistImported} desiderata`);
       if (data.plays?.imported)        parts.push(`${data.plays.imported} partite`);
-      show(parts.length ? `Sincronizzato: ${parts.join(", ")}.` : "Tutto già aggiornato.");
+      const summary = parts.length ? `Sincronizzato: ${parts.join(", ")}.` : "Tutto già aggiornato.";
+      if (data.loginFailed) {
+        show(`${summary} Login BGG non riuscito: scritture su BGG non disponibili al momento.`, "error");
+      } else {
+        show(summary);
+      }
       router.refresh();
     } catch {
       show("Sincronizzazione lenta o assente. Riprova.", "error");
