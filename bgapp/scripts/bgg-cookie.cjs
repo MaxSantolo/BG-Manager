@@ -13,8 +13,23 @@ const WebSocket = require("ws");
 require("dotenv").config();
 const { neon } = require("@neondatabase/serverless");
 
-const PORT = 9333;
-const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const PORT = Number(process.env.BGG_CDP_PORT || 9333);
+const HEADLESS = process.argv.includes("--headless") || process.env.BGG_HEADLESS === "1";
+
+/** Chrome binary: explicit override, else the usual macOS/Linux locations. */
+function findChrome() {
+  const candidates = [
+    process.env.CHROME_PATH,
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+  ].filter(Boolean);
+  for (const c of candidates) { try { if (fs.existsSync(c)) return c; } catch {} }
+  throw new Error("Chrome non trovato: imposta CHROME_PATH");
+}
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function getJson(url) {
@@ -53,6 +68,8 @@ function rpc(ws) {
   if (!username || !password) { console.log("NO_CREDENTIALS"); process.exit(1); }
   console.log("credenziali dal DB: utente", username, "| password presente:", !!password);
 
+  const CHROME = findChrome();
+  console.log("chrome:", CHROME, "| headless:", HEADLESS);
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), "bggchrome-"));
   const chrome = spawn(CHROME, [
     `--remote-debugging-port=${PORT}`,
@@ -60,6 +77,8 @@ function rpc(ws) {
     "--no-first-run", "--no-default-browser-check",
     "--disable-features=Translate",
     "--window-size=1100,800",
+    "--disable-blink-features=AutomationControlled",
+    ...(HEADLESS ? ["--headless=new", "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage"] : []),
     "about:blank",
   ], { stdio: "ignore", detached: false });
 
@@ -77,6 +96,15 @@ function rpc(ws) {
   const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
   await send("Page.enable", {}, sessionId);
   await send("Network.enable", {}, sessionId);
+  // Present as a normal Chrome: headless is otherwise rejected by Cloudflare.
+  await send("Network.setUserAgentOverride", {
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    acceptLanguage: "it-IT,it;q=0.9,en;q=0.8",
+    platform: "MacIntel",
+  }, sessionId).catch(() => {});
+  await send("Page.addScriptToEvaluateOnNewDocument", {
+    source: "Object.defineProperty(navigator,'webdriver',{get:()=>undefined});",
+  }, sessionId).catch(() => {});
 
   // 1) Land on the site so Cloudflare can issue its clearance cookie.
   await send("Page.navigate", { url: "https://boardgamegeek.com/" }, sessionId);
