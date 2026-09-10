@@ -6,13 +6,23 @@ name: Rinnova cookie BGG
 # il cookie all'app tramite un endpoint dedicato — nessuna credenziale del
 # database è coinvolta.
 #
-# Rete di sicurezza per quando il Mac resta spento: normalmente ci pensa il job
-# launchd locale (com.bgmanager.bggcookie).
+# STATO: DORMIENTE — di proposito.
+# Il rinnovo lo fa il job launchd locale sul Mac (com.bgmanager.bggcookie), che
+# è attivo e verificato. Questo workflow resta come alternativa pronta ma NON
+# schedulata: i secret non esistono, quindi uno schedule fallirebbe ogni
+# settimana per niente. (E gli schedule GitHub si disattivano da soli dopo 60
+# giorni di inattività del repo, cioè proprio quando servirebbero.)
+#
+# PER ATTIVARLO servono, come secret del repository:
+#   BGG_USERNAME, BGG_PASSWORD          credenziali BGG (repo pubblico: valutare)
+#   BGG_COOKIE_TOKEN                    >= 32 caratteri, uguale alla env di Vercel
+#   BGG_COOKIE_ENDPOINT                 https://<app>/api/bgg-cookie
+# e poi riaggiungere qui sotto il trigger:
+#   schedule:
+#     - cron: "0 6 * * 1"
 
 on:
-  schedule:
-    - cron: "0 6 * * 1"      # ogni lunedì 06:00 UTC
-  workflow_dispatch:          # esecuzione manuale per provarlo
+  workflow_dispatch:          # solo avvio manuale finché resta dormiente
 
 jobs:
   refresh:
