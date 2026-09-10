@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { BggSyncError, bggSession, syncCollection, syncPlays } from "@/lib/bggSync";
 import { rebuildPlaces, rebuildPlayers } from "@/lib/registry";
+import { isBggSessionAlive } from "@/lib/bggWrite";
 
 export const maxDuration = 60;
 
@@ -37,9 +38,13 @@ export async function POST(req: NextRequest) {
     // sync — fall back to key-only reads instead of losing the import too.
     let cookie: string | undefined;
     let loginFailed = false;
+    let cookieDead = false;
     if (settings.bggCookie?.trim()) {
       // A pasted browser cookie is the working write path (login is Cloudflare-blocked).
       cookie = settings.bggCookie.trim();
+      // Reads would succeed with the API key alone, so an expired cookie would
+      // otherwise make the sync look perfectly healthy while every write fails.
+      cookieDead = !(await isBggSessionAlive(cookie));
     } else if (settings.bggPassword?.trim()) {
       try {
         cookie = await bggSession(username, settings.bggPassword);
@@ -67,6 +72,7 @@ export async function POST(req: NextRequest) {
       plays,
       lastSyncAt: updated.lastSyncAt,
       loginFailed,
+      cookieDead,
     });
   } catch (err: unknown) {
     if (err instanceof BggSyncError)

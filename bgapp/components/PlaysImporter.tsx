@@ -93,7 +93,8 @@ export default function PlaysImporter({ initialUsername }: Props) {
                       style={{ color: "var(--text-secondary)" }}>Username BGG</label>
                     <input type="text" value={username} onChange={e => setUsername(e.target.value)}
                       placeholder="es. MaxSantolo" className="w-full"
-                      disabled={status === "loading"} />
+                      disabled={status === "loading"}
+                      onKeyDown={e => e.key === "Enter" && username.trim() && runImport(username, password)} />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold mb-1 uppercase tracking-wide"

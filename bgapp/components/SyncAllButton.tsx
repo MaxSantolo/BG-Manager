@@ -21,7 +21,7 @@ export default function SyncAllButton() {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 90000);
       let data: {
-        skipped?: string; error?: string; loginFailed?: boolean;
+        skipped?: string; error?: string; loginFailed?: boolean; cookieDead?: boolean;
         games?: { imported: number; enriched: number; statusChanged: number; wishlistImported: number };
         plays?: { imported: number };
       } = {};
@@ -47,7 +47,9 @@ export default function SyncAllButton() {
       if (data.games?.wishlistImported)parts.push(`${data.games.wishlistImported} desiderata`);
       if (data.plays?.imported)        parts.push(`${data.plays.imported} partite`);
       const summary = parts.length ? `Sincronizzato: ${parts.join(", ")}.` : "Tutto già aggiornato.";
-      if (data.loginFailed) {
+      if (data.cookieDead) {
+        show(`${summary} Sessione BGG scaduta: le scritture su BGG non funzionano — rinnova il cookie.`, "error");
+      } else if (data.loginFailed) {
         show(`${summary} Login BGG non riuscito: scritture su BGG non disponibili al momento.`, "error");
       } else {
         show(summary);

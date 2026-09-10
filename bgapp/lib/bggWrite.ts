@@ -104,6 +104,31 @@ async function sessionCookie(): Promise<string> {
   return (await credentials()).cookie;
 }
 
+/**
+ * Is the stored BGG session still alive? geekplay answers "You must login to
+ * save plays" when unauthenticated and a validation error when authenticated,
+ * so we send a deliberately invalid play (no objectid) — nothing can be created
+ * either way. Used by the sync to warn that writes are silently dead, instead of
+ * letting the user find out days later from an unpublished play.
+ */
+export async function isBggSessionAlive(cookie: string): Promise<boolean> {
+  try {
+    const res = await withBggTimeout(
+      fetch(GEEKPLAY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest", Cookie: cookie },
+        body: JSON.stringify({ ajax: 1, action: "save", version: 2, objecttype: "thing" }),
+      }),
+      8000,
+    );
+    const text = await res.text();
+    if (res.headers.get("cf-mitigated") || text.trimStart().startsWith("<")) return false;
+    return !/must login/i.test(text);
+  } catch {
+    return false;
+  }
+}
+
 async function geekplay(cookie: string, body: Record<string, unknown>): Promise<string> {
   const res = await fetch(GEEKPLAY_URL, {
     method: "POST",
