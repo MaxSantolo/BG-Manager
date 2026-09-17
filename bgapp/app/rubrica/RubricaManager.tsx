@@ -21,7 +21,7 @@ export default function RubricaManager({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--text-secondary)" }}>
+        <h2 className="text-sm font-semibold" style={{ color: "var(--text-secondary)" }}>
           Giocatori ({players.length})
         </h2>
         {players.length === 0 && <p className="text-sm" style={{ color: "var(--text-muted)" }}>Nessun giocatore.</p>}
@@ -34,7 +34,7 @@ export default function RubricaManager({
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--text-secondary)" }}>
+        <h2 className="text-sm font-semibold" style={{ color: "var(--text-secondary)" }}>
           Luoghi ({places.length})
         </h2>
         {places.length === 0 && <p className="text-sm" style={{ color: "var(--text-muted)" }}>Nessun luogo.</p>}
@@ -51,7 +51,7 @@ export default function RubricaManager({
 function Field({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <label className="block">
-      <span className="block text-[11px] font-semibold uppercase tracking-wide mb-0.5"
+      <span className="field-label"
         style={{ color: "var(--text-secondary)" }}>{label}</span>
       <input {...props} className="w-full text-sm" />
     </label>

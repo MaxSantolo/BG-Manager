@@ -73,7 +73,7 @@ export default async function GameDetailPage({
       </div>
 
       {/* BGG Hero card — always shown if there's any data to display */}
-      <div className="card flex gap-5">
+      <div className="card flex flex-col sm:flex-row gap-4 sm:gap-5">
         {(game.image || game.thumbnail) ? (
           <img
             src={game.image || game.thumbnail || ""}
@@ -127,9 +127,9 @@ export default async function GameDetailPage({
           )}
           {game.gameSleeves && game.gameSleeves.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
-              <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-secondary)" }}>Bustine:</span>
+              <span className="field-label mb-0" style={{ color: "var(--text-secondary)" }}>Bustine:</span>
               {game.gameSleeves.map(gs => (
-                <span key={gs.id} className="text-xs px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border" style={{ color: "var(--text-secondary)", borderColor: "var(--border)" }}>
+                <span key={gs.id} className="text-xs px-2 py-0.5 rounded-md border" style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)", borderColor: "var(--border)" }}>
                   {gs.sleeve.size}{gs.sleeve.label ? ` (${gs.sleeve.label})` : ""} ×{gs.qty}
                 </span>
               ))}

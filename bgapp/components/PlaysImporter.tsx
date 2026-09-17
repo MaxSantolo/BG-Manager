@@ -89,7 +89,7 @@ export default function PlaysImporter({ initialUsername }: Props) {
                     Inserisci le credenziali, oppure salvale nelle <Link href="/settings" className="underline" style={{ color: "var(--accent-blue-light)" }}>impostazioni</Link> per non doverle reinserire.
                   </p>
                   <div>
-                    <label className="block text-xs font-semibold mb-1 uppercase tracking-wide"
+                    <label className="field-label"
                       style={{ color: "var(--text-secondary)" }}>Username BGG</label>
                     <input type="text" value={username} onChange={e => setUsername(e.target.value)}
                       placeholder="es. MaxSantolo" className="w-full"
@@ -97,7 +97,7 @@ export default function PlaysImporter({ initialUsername }: Props) {
                       onKeyDown={e => e.key === "Enter" && username.trim() && runImport(username, password)} />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold mb-1 uppercase tracking-wide"
+                    <label className="field-label"
                       style={{ color: "var(--text-secondary)" }}>Password BGG</label>
                     <div className="relative">
                       <input

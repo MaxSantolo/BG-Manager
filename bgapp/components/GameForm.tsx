@@ -34,7 +34,7 @@ function parseDesigners(val: unknown): string[] {
 }
 
 const Label = ({ children }: { children: React.ReactNode }) => (
-  <label className="block text-xs font-semibold mb-1 uppercase tracking-wide"
+  <label className="field-label"
     style={{ color: "var(--text-secondary)" }}>
     {children}
   </label>

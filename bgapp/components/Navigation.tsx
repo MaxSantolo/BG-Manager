@@ -60,8 +60,9 @@ export default function Navigation() {
                 href={href}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
                 style={{
-                  backgroundColor: active ? "var(--accent-red)" : "transparent",
+                  backgroundColor: active ? "rgba(192, 52, 52, 0.16)" : "transparent",
                   color: active ? "var(--text-primary)" : "var(--text-secondary)",
+                  boxShadow: active ? "inset 0 0 0 1px rgba(244, 125, 116, 0.25)" : "none",
                 }}
               >
                 <Icon size={15} />
@@ -98,7 +99,8 @@ export default function Navigation() {
       {open && (
         <div className="sm:hidden fixed inset-0 z-40 bg-black/40" onClick={() => setOpen(false)}>
           <div
-            className="absolute top-0 left-0 w-64 h-full bg-white dark:bg-zinc-900 shadow-lg p-5 flex flex-col gap-3"
+            className="absolute top-0 left-0 w-64 h-full shadow-2xl p-5 flex flex-col gap-3"
+            style={{ backgroundColor: "var(--bg-card)", borderRight: "1px solid var(--border)" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
@@ -115,7 +117,7 @@ export default function Navigation() {
                   href={href}
                   className="flex items-center gap-2 px-2 py-2 rounded-md text-base font-medium"
                   style={{
-                    backgroundColor: active ? "var(--accent-red)" : "transparent",
+                    backgroundColor: active ? "rgba(192, 52, 52, 0.16)" : "transparent",
                     color: active ? "var(--text-primary)" : "var(--text-secondary)",
                   }}
                   onClick={() => setOpen(false)}

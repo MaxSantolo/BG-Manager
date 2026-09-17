@@ -41,7 +41,7 @@ export default function GameCard({
   return (
     <Link
       href={fromUrl ? `/collection/${id}?from=${encodeURIComponent(fromUrl)}` : `/collection/${id}`}
-      className="block bg-white dark:bg-zinc-900 rounded-lg shadow p-4 flex gap-3 items-center focus:outline-none focus:ring-2 focus:ring-accent-red"
+      className="card p-3.5 flex gap-3 items-center transition-colors hover:border-[var(--border-light)]"
       style={{ textDecoration: "none" }}
       tabIndex={0}
     >
@@ -65,7 +65,7 @@ export default function GameCard({
           )}
         </div>
         <div className="flex flex-wrap gap-2 mt-1 text-xs">
-          <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800" style={{ color: "var(--text-secondary)" }}>{type}</span>
+          <span className="px-2 py-0.5 rounded-md" style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>{type}</span>
           <StatusBadge status={status} />
           {loans && loans.length > 0 && <span className="badge bg-amber-900 text-amber-200">In prestito</span>}
           {cost != null && <span>Costo: €{cost.toFixed(2)}</span>}

@@ -1,20 +1,32 @@
 @import "tailwindcss";
 
+/*
+ * Palette: same navy + red identity, re-tuned for legibility. Every text/background
+ * pair used by the app meets WCAG AA (>= 4.5:1) — the previous muted text and blue
+ * links sat at ~2.9:1, hard to read on a phone. Inputs are slightly DARKER than
+ * cards (an inset look) instead of lighter.
+ */
 :root {
-  --bg-base: #080d1a;
-  --bg-card: #0f1929;
-  --bg-elevated: #162035;
-  --bg-input: #1a2540;
-  --accent-red: #8b1a1a;
-  --accent-red-hover: #a52424;
-  --accent-red-light: #c0392b;
-  --accent-blue: #1e3a5f;
-  --accent-blue-light: #2563a8;
-  --text-primary: #f0ebe0;
-  --text-secondary: #9aacbf;
-  --text-muted: #5c7080;
-  --border: #1e3550;
-  --border-light: #2a4a6e;
+  --bg-base: #0a0f1c;
+  --bg-card: #111a2d;
+  --bg-elevated: #1a2640;
+  --bg-input: #0d1526;
+  --accent-red: #c03434;
+  --accent-red-hover: #a82c2c;
+  --accent-red-light: #f47d74;
+  --accent-blue: #1f3a60;
+  --accent-blue-light: #6fabf4;
+  --text-primary: #f3efe7;
+  --text-secondary: #b3bfcd;
+  --text-muted: #8d9bae;
+  --border: #22314b;
+  --border-light: #334668;
+  --ring: rgba(111, 171, 244, 0.35);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 12px 28px -18px rgba(0, 0, 0, 0.7);
+  /* The app is dark-only: native controls (checkboxes, scrollbars, select
+     popups, date pickers) must render dark too, or an unchecked checkbox is a
+     white square on navy. */
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -106,17 +118,33 @@ body {
 
 /* Form inputs — kept in @layer base so Tailwind utilities (pl-8 etc.) can override */
 @layer base {
-  input, select, textarea {
+  /* Tailwind v4's default border colour is currentColor, so `divide-y` lines
+     came out almost white: a borderColor set on the list container never
+     reaches the children. Utilities and inline styles still override this. */
+  *, ::before, ::after {
+    border-color: var(--border);
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]), select, textarea {
     background-color: var(--bg-input);
     color: var(--text-primary);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    padding: 0.55rem 0.8rem;
     outline: none;
-    transition: border-color 0.15s;
+    transition: border-color 0.15s, box-shadow 0.15s;
   }
-  input:focus, select:focus, textarea:focus {
+  input:not([type="checkbox"]):not([type="radio"]):hover, select:hover, textarea:hover {
+    border-color: #40567c;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:focus {
     border-color: var(--accent-blue-light);
+    box-shadow: 0 0 0 3px var(--ring);
+  }
+  input[type="checkbox"], input[type="radio"] {
+    accent-color: var(--accent-red);
+    width: 1rem;
+    height: 1rem;
   }
   input::placeholder, textarea::placeholder {
     color: var(--text-muted);
@@ -149,110 +177,145 @@ body {
   }
 }
 
-/* Buttons */
-.btn-primary {
-  background-color: var(--accent-red);
-  color: var(--text-primary);
-  padding: 0.5rem 1.25rem;
-  border-radius: 6px;
-  font-weight: 600;
-  transition: background-color 0.15s;
-  border: none;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-.btn-primary:hover { background-color: var(--accent-red-hover); }
-
-.btn-secondary {
-  background-color: var(--bg-elevated);
-  color: var(--text-primary);
-  padding: 0.5rem 1.25rem;
-  border-radius: 6px;
-  font-weight: 500;
-  border: 1px solid var(--border-light);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  transition: background-color 0.15s;
-}
-.btn-secondary:hover { background-color: var(--accent-blue); }
-
-.btn-ghost {
-  background: transparent;
-  color: var(--text-secondary);
-  padding: 0.4rem 0.75rem;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
-  transition: color 0.15s, background-color 0.15s;
-}
-.btn-ghost:hover { background-color: var(--bg-elevated); color: var(--text-primary); }
-
-.btn-danger {
-  background-color: var(--accent-red);
-  color: var(--text-primary);
-  padding: 0.5rem 1.25rem;
-  border-radius: 6px;
-  font-weight: 600;
-  transition: background-color 0.15s;
-  border: none;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-.btn-danger:hover { background-color: var(--accent-red-hover); }
-
 @keyframes slideIn {
-  from { opacity: 0; transform: translateX(1rem); }
-  to   { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; transform: translateY(-0.5rem); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Card */
-.card {
-  background-color: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1.25rem;
-}
+/*
+ * Component primitives live in @layer components so Tailwind utilities on the
+ * same element win, as the markup intends. Unlayered, they silently beat them:
+ * `btn-ghost p-1` icon buttons and `card p-0` tables never got the padding
+ * written in the components (63 such combinations).
+ */
+@layer components {
+  /* Keyboard focus ring. :focus-visible means mouse and touch taps don't show it. */
+  :where(button, a, summary, [role="switch"]):focus-visible {
+    outline: 2px solid var(--accent-blue-light);
+    outline-offset: 2px;
+  }
 
-/* Badge */
-.badge {
-  display: inline-block;
-  padding: 0.15rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
+  /* Buttons */
+  .btn-primary,
+  .btn-danger {
+    background-color: var(--accent-red);
+    color: #fff;
+    padding: 0.55rem 1.1rem;
+    border-radius: 10px;
+    font-weight: 600;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 0 8px 18px -10px rgba(192, 52, 52, 0.6);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    transition: background-color 0.15s, box-shadow 0.15s, transform 0.1s;
+  }
+  .btn-primary:hover,
+  .btn-danger:hover { background-color: var(--accent-red-hover); }
 
-/* Table */
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
+  .btn-secondary {
+    background-color: var(--bg-elevated);
+    color: var(--text-primary);
+    padding: 0.55rem 1.1rem;
+    border-radius: 10px;
+    font-weight: 500;
+    border: 1px solid var(--border-light);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    transition: background-color 0.15s, border-color 0.15s, transform 0.1s;
+  }
+  .btn-secondary:hover { background-color: #22304d; border-color: #40567c; }
+
+  .btn-primary:active,
+  .btn-danger:active,
+  .btn-secondary:active { transform: translateY(1px); }
+  .btn-primary:disabled,
+  .btn-danger:disabled,
+  .btn-secondary:disabled { cursor: not-allowed; box-shadow: none; transform: none; }
+
+  /* inline-flex matters: as a plain inline <a>, the block-level svg Tailwind's
+     preflight gives icons split it into empty line boxes — an icon link in a
+     table row was 59px tall for a 12px icon. */
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    background: transparent;
+    color: var(--text-secondary);
+    padding: 0.4rem 0.7rem;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: color 0.15s, background-color 0.15s;
+  }
+  .btn-ghost:hover { background-color: rgba(255, 255, 255, 0.05); color: var(--text-primary); }
+
+
+  /* Card: softer edge + a faint lift instead of a hard outline doing all the work. */
+  .card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.25rem;
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Form field label: sentence case. Every field in SMALL CAPS was the most dated
+     thing in the UI. Section eyebrows keep the small-caps look, used sparingly. */
+  .field-label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.25rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.375rem;
+  }
+  .eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  /* Badge: status colours come from the configurable status set. */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1rem;
+    white-space: nowrap;
+  }
+
+  /* Table */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+  .data-table th {
+    color: var(--text-muted);
+    padding: 0.65rem 0.85rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .data-table td {
+    padding: 0.65rem 0.85rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+  }
+  .data-table tr:hover td {
+    background-color: rgba(255, 255, 255, 0.025);
+  }
+  .data-table tr:last-child td { border-bottom: none; }
 }
-.data-table th {
-  background-color: var(--bg-elevated);
-  color: var(--text-secondary);
-  padding: 0.6rem 0.75rem;
-  text-align: left;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-}
-.data-table td {
-  padding: 0.6rem 0.75rem;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-primary);
-}
-.data-table tr:hover td {
-  background-color: var(--bg-elevated);
-}
-.data-table tr:last-child td { border-bottom: none; }

@@ -123,8 +123,8 @@ export default function CollectionTable({
   return (
     <div className="space-y-3">
       {/* Filters */}
-      <div className="card flex flex-wrap gap-3 items-center py-3">
-        <div className="relative flex-1 min-w-40">
+      <div className="card grid grid-cols-2 gap-3 items-center py-3 sm:flex sm:flex-wrap">
+        <div className="relative col-span-2 sm:flex-1 sm:min-w-40">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }} />
           <input
             type="text"
@@ -134,24 +134,24 @@ export default function CollectionTable({
             className="w-full pl-8 text-sm"
           />
         </div>
-        <select value={status} onChange={(e) => onStatus(e.target.value)} className="text-sm">
+        <select value={status} onChange={(e) => onStatus(e.target.value)} className="text-sm w-full sm:w-auto">
           <option value="">Tutti gli stati</option>
           {statuses.filter((s) => !s.hidden).map((s) => (
             <option key={s.key} value={s.key}>{s.label}</option>
           ))}
         </select>
-        <select value={type} onChange={(e) => onType(e.target.value)} className="text-sm">
+        <select value={type} onChange={(e) => onType(e.target.value)} className="text-sm w-full sm:w-auto">
           <option value="">Tutti i tipi</option>
           {GAME_TYPES.map((t) => (
             <option key={t} value={t}>{t}</option>
           ))}
         </select>
-        <select value={sort} onChange={(e) => onSort(e.target.value)} className="text-sm">
+        <select value={sort} onChange={(e) => onSort(e.target.value)} className="text-sm w-full sm:w-auto">
           {SORT_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
-        <select value={limit} onChange={(e) => onLimit(Number(e.target.value))} className="text-sm">
+        <select value={limit} onChange={(e) => onLimit(Number(e.target.value))} className="text-sm w-full sm:w-auto">
           {PAGE_SIZES.map((n) => (
             <option key={n} value={n}>{n} / pag.</option>
           ))}

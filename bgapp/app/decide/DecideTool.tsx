@@ -125,7 +125,7 @@ export default function DecideTool() {
         <div className="space-y-2">
           <div className="flex items-center gap-1.5">
             <Users size={13} style={{ color: "var(--text-muted)" }} />
-            <span className="text-xs font-semibold uppercase tracking-wide"
+            <span className="field-label mb-0"
               style={{ color: "var(--text-secondary)" }}>Giocatori</span>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -140,7 +140,7 @@ export default function DecideTool() {
         <div className="space-y-2">
           <div className="flex items-center gap-1.5">
             <Brain size={13} style={{ color: "var(--text-muted)" }} />
-            <span className="text-xs font-semibold uppercase tracking-wide"
+            <span className="field-label mb-0"
               style={{ color: "var(--text-secondary)" }}>Peso</span>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -153,7 +153,7 @@ export default function DecideTool() {
         <div className="space-y-2">
           <div className="flex items-center gap-1.5">
             <Clock size={13} style={{ color: "var(--text-muted)" }} />
-            <span className="text-xs font-semibold uppercase tracking-wide"
+            <span className="field-label mb-0"
               style={{ color: "var(--text-secondary)" }}>Durata</span>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -220,7 +220,7 @@ export default function DecideTool() {
             <img src={picked.thumbnail} alt="" className="w-20 h-20 object-contain rounded flex-shrink-0" />
           )}
           <div className="min-w-0 flex-1">
-            <p className="text-xs uppercase tracking-wide mb-0.5" style={{ color: "var(--accent-red-light)" }}>
+            <p className="eyebrow mb-0.5" style={{ color: "var(--accent-red-light)" }}>
               Stasera si gioca a
             </p>
             <Link href={`/collection/${picked.id}`}

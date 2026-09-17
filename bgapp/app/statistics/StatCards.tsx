@@ -28,7 +28,7 @@ function StatCard({ label, value, sub, accent }: {
 }) {
   return (
     <div className="card" style={{ borderLeft: accent ? "3px solid var(--accent-red)" : undefined }}>
-      <p className="text-xs uppercase tracking-wide mb-1" style={{ color: "var(--text-secondary)" }}>
+      <p className="eyebrow mb-1" style={{ color: "var(--text-secondary)" }}>
         {label}
       </p>
       <p className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>

@@ -94,17 +94,17 @@ export default function ReportTool({ presets }: { presets: Preset[] }) {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className="block text-xs font-semibold mb-1 uppercase tracking-wide"
+            <label className="field-label"
               style={{ color: "var(--text-secondary)" }}>Dal</label>
             <DateInput value={from} onChange={setFrom} className="w-full" />
           </div>
           <div>
-            <label className="block text-xs font-semibold mb-1 uppercase tracking-wide"
+            <label className="field-label"
               style={{ color: "var(--text-secondary)" }}>Al</label>
             <DateInput value={to} onChange={setTo} className="w-full" />
           </div>
           <div>
-            <label className="block text-xs font-semibold mb-1 uppercase tracking-wide"
+            <label className="field-label"
               style={{ color: "var(--text-secondary)" }}>Titolo</label>
             <input type="text" value={title} onChange={e => setTitle(e.target.value)}
               className="w-full" maxLength={60} placeholder="Partite giocate" />

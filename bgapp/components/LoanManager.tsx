@@ -191,7 +191,7 @@ export default function LoanManager({ gameId, initialLoans }: Props) {
 
       {active.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>Attivi</p>
+          <p className="eyebrow" style={{ color: "var(--text-muted)" }}>Attivi</p>
           {active.map((l) => (
             <div key={l.id} className="flex items-center justify-between gap-2 p-2.5 rounded-lg"
               style={{ backgroundColor: "var(--bg-elevated)" }}>
@@ -223,7 +223,7 @@ export default function LoanManager({ gameId, initialLoans }: Props) {
 
       {history.length > 0 && (
         <details className="space-y-2">
-          <summary className="text-xs font-semibold uppercase tracking-wide cursor-pointer"
+          <summary className="eyebrow cursor-pointer"
             style={{ color: "var(--text-muted)" }}>
             Storico ({history.length})
           </summary>

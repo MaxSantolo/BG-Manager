@@ -135,11 +135,11 @@ export default function StatusConfigEditor() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <label className="block">
-                <span className="block text-[11px] uppercase tracking-wide mb-0.5" style={{ color: "var(--text-secondary)" }}>Etichetta</span>
+                <span className="field-label" style={{ color: "var(--text-secondary)" }}>Etichetta</span>
                 <input type="text" value={r.label} onChange={e => patch(i, { label: e.target.value })} className="w-full text-sm" />
               </label>
               <label className="block">
-                <span className="block text-[11px] uppercase tracking-wide mb-0.5" style={{ color: "var(--text-secondary)" }}>Colore</span>
+                <span className="field-label" style={{ color: "var(--text-secondary)" }}>Colore</span>
                 <select value={r.color} onChange={e => patch(i, { color: e.target.value })} className="w-full text-sm">
                   {COLORS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                   {!COLORS.some(c => c.value === r.color) && <option value={r.color}>Personalizzato</option>}
@@ -148,7 +148,7 @@ export default function StatusConfigEditor() {
             </div>
 
             <div>
-              <span className="block text-[11px] uppercase tracking-wide mb-1" style={{ color: "var(--text-secondary)" }}>
+              <span className="field-label" style={{ color: "var(--text-secondary)" }}>
                 Corrispondenza BGG
               </span>
               <div className="flex flex-wrap gap-x-4 gap-y-1">

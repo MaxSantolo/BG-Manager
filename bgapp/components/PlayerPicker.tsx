@@ -173,7 +173,7 @@ export default function PlayerPicker({ players, onChange, winMode = "manual" }: 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <label className="block text-xs font-semibold uppercase tracking-wide"
+        <label className="field-label mb-0"
           style={{ color: "var(--text-secondary)" }}>Giocatori</label>
         <button type="button" onClick={() => { setPicking(v => !v); setCreating(false); setErr(null); }}
           className="btn-ghost text-xs flex items-center gap-1"
