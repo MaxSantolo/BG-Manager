@@ -40,10 +40,16 @@ export async function searchBgg(query: string): Promise<BggSearchResult[]> {
 
   const xml = await res.text();
   const results: BggSearchResult[] = [];
+  // BGG lists a game that is also filed as an expansion twice (type="boardgame"
+  // and type="boardgameexpansion", same id): without this the picker shows
+  // duplicates and React warns about repeated keys.
+  const seen = new Set<number>();
 
   const itemMatches = xml.matchAll(/<item type="boardgame[^"]*" id="(\d+)">([\s\S]*?)<\/item>/g);
   for (const match of itemMatches) {
     const id = parseInt(match[1]);
+    if (seen.has(id)) continue;
+    seen.add(id);
     const inner = match[2];
     const nameMatch = inner.match(/<name type="primary"[^/]*value="([^"]+)"/);
     const yearMatch = inner.match(/<yearpublished value="(\d+)"/);

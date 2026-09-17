@@ -57,10 +57,37 @@ body {
  * changes.
  */
 .safe-top    { padding-top: env(safe-area-inset-top); }
-.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+/* Used on <main>. Being unlayered it beats Tailwind's py-6, so it must carry the
+   whole bottom padding itself — it used to be just the inset (0 on most
+   phones), which parked the form's last buttons under any fixed bottom element
+   (the auto-sync pill). Phones get extra room to scroll clear of it. */
+.safe-bottom { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
+@media (min-width: 640px) {
+  .safe-bottom { padding-bottom: calc(1.5rem + env(safe-area-inset-bottom)); }
+}
 
 /* Floating UI has to clear the home indicator, not just the viewport edge. */
 .safe-fixed-bottom { bottom: calc(1.5rem + env(safe-area-inset-bottom)); }
+
+/* Toasts: on a phone the bottom is where the form's action buttons live, so a
+   bottom toast lands right on "Salva" and eats the tap. Put them under the nav
+   bar on small screens; bottom-right from sm up, where there's room. */
+.toast-stack {
+  position: fixed;
+  z-index: 50;
+  left: 1rem;
+  right: 1rem;
+  top: calc(4rem + env(safe-area-inset-top));
+}
+@media (min-width: 640px) {
+  .toast-stack {
+    left: auto;
+    right: 1.5rem;
+    top: auto;
+    bottom: calc(1.5rem + env(safe-area-inset-bottom));
+    align-items: flex-end;
+  }
+}
 
 /* Overlays cover the whole screen, insets included — pad so a tall dialog
    never tucks its header under the Dynamic Island. */
@@ -96,6 +123,29 @@ body {
   }
   select option {
     background-color: var(--bg-elevated);
+  }
+  /* Native date pickers (iOS wheel, Chrome calendar) should match the dark UI. */
+  input[type="date"] {
+    color-scheme: dark;
+  }
+}
+
+/* iOS Safari only (-webkit-touch-callout is iOS WebKit): its native date input
+   collapses when EMPTY (no placeholder, so it's shorter than its neighbours),
+   ignores width:100% when filled and overflows its container, and centres the
+   value. Scoped so desktop and Android keep their native controls untouched. */
+@supports (-webkit-touch-callout: none) {
+  input[type="date"] {
+    -webkit-appearance: none;
+    appearance: none;
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 2.625rem;
+  }
+  input[type="date"]::-webkit-date-and-time-value {
+    text-align: left;
+    min-height: 1.5em;
   }
 }
 

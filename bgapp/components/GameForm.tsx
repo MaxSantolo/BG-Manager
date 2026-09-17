@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Save, Loader2, RefreshCw, ExternalLink, User, Calendar, AlertTriangle } from "lucide-react";
 import BggSearch from "@/components/BggSearch";
 import SleeveEditor from "@/components/SleeveEditor";
+import DateInput from "@/components/DateInput";
 import { useToast } from "@/components/Toast";
 import type { BggGameDetail } from "@/lib/bgg";
 import { apiFetch } from "@/lib/fetchClient";
@@ -459,13 +460,11 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
               </div>
               <div>
                 <Label>Data acquisto</Label>
-                <input type="date" value={purchaseDate}
-                  onChange={e => setPurchaseDate(e.target.value)} className="w-full" />
+                <DateInput value={purchaseDate} onChange={setPurchaseDate} className="w-full" />
               </div>
               <div>
                 <Label>Data vendita</Label>
-                <input type="date" value={saleDate}
-                  onChange={e => setSaleDate(e.target.value)} className="w-full" />
+                <DateInput value={saleDate} onChange={setSaleDate} className="w-full" />
               </div>
             </>
           )}

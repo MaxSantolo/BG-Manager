@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Download, Loader2, Image as ImageIcon, Calendar, Dices, Clock } from "lucide-react";
+import DateInput from "@/components/DateInput";
 
 interface ReportGame {
   key: string;
@@ -95,12 +96,12 @@ export default function ReportTool({ presets }: { presets: Preset[] }) {
           <div>
             <label className="block text-xs font-semibold mb-1 uppercase tracking-wide"
               style={{ color: "var(--text-secondary)" }}>Dal</label>
-            <input type="date" value={from} onChange={e => setFrom(e.target.value)} className="w-full" />
+            <DateInput value={from} onChange={setFrom} className="w-full" />
           </div>
           <div>
             <label className="block text-xs font-semibold mb-1 uppercase tracking-wide"
               style={{ color: "var(--text-secondary)" }}>Al</label>
-            <input type="date" value={to} onChange={e => setTo(e.target.value)} className="w-full" />
+            <DateInput value={to} onChange={setTo} className="w-full" />
           </div>
           <div>
             <label className="block text-xs font-semibold mb-1 uppercase tracking-wide"
