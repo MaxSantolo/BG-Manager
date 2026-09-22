@@ -1,4 +1,5 @@
 "use client";
+import { dayInput } from "@/lib/dates";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -22,12 +23,6 @@ interface Props {
   initialData?: Record<string, unknown>;
   id?: number;
   returnUrl?: string;
-}
-
-function toDateInput(val: unknown): string {
-  if (!val) return "";
-  const d = new Date(val as string);
-  return isNaN(d.getTime()) ? "" : d.toISOString().split("T")[0];
 }
 
 function parseDesigners(val: unknown): string[] {
@@ -75,8 +70,8 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
   const [cost, setCost]             = useState(String(initialData?.cost ?? ""));
   const [salePrice, setSalePrice]   = useState(String(initialData?.salePrice ?? ""));
   const [insert, setInsert]         = useState(String(initialData?.insert ?? "No"));
-  const [purchaseDate, setPurchaseDate] = useState(toDateInput(initialData?.purchaseDate));
-  const [saleDate, setSaleDate]         = useState(toDateInput(initialData?.saleDate));
+  const [purchaseDate, setPurchaseDate] = useState(dayInput(initialData?.purchaseDate));
+  const [saleDate, setSaleDate]         = useState(dayInput(initialData?.saleDate));
   const [valueRange, setValueRange]     = useState(String(initialData?.valueRange ?? ""));
   const [desirability, setDesirability] = useState(String(initialData?.desirability ?? "3"));
   const [notes, setNotes]               = useState(String(initialData?.notes ?? ""));

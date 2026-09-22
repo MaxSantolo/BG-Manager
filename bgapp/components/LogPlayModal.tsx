@@ -1,4 +1,5 @@
 "use client";
+import { todayInput } from "@/lib/dates";
 
 import { useState, useEffect } from "react";
 import { Plus, X, Loader2, CheckCircle, AlertCircle, Trophy, Search } from "lucide-react";
@@ -22,10 +23,6 @@ interface Props {
   preselectedGame?: Game;
 }
 
-function todayStr() {
-  return new Date().toISOString().split("T")[0];
-}
-
 const Label = ({ children }: { children: React.ReactNode }) => (
   <label className="field-label"
     style={{ color: "var(--text-secondary)" }}>{children}</label>
@@ -41,7 +38,7 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
   const [bggResults, setBggResults]     = useState<{ id: number; name: string; year?: number }[]>([]);
   const [bggSearching, setBggSearching] = useState(false);
   const [bggPicked, setBggPicked]       = useState<BggGameDetail | null>(null);
-  const [date, setDate]             = useState(todayStr());
+  const [date, setDate]             = useState(todayInput());
   const [quantity, setQuantity]     = useState("1");
   const [duration, setDuration]     = useState("");
   const [location, setLocation]     = useState("");
@@ -215,7 +212,7 @@ export default function LogPlayModal({ games, bggUsername, preselectedGame }: Pr
     setBggQuery("");
     setBggResults([]);
     setBggPicked(null);
-    setDate(todayStr());
+    setDate(todayInput());
     setQuantity("1");
     setDuration("");
     setLocation("");

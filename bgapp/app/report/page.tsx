@@ -1,14 +1,12 @@
 import { FileImage } from "lucide-react";
 import ReportTool, { type Preset } from "./ReportTool";
+import { APP_TZ, todayInput } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
 /** Rome, not UTC: "today" should mean the user's today, not the server's. */
 function romeToday(): Date {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit",
-  }).format(new Date());
-  return new Date(`${parts}T00:00:00.000Z`);
+  return new Date(`${todayInput(APP_TZ)}T00:00:00.000Z`);
 }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);

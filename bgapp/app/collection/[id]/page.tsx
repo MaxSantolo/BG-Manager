@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { formatDay } from "@/lib/dates";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ExternalLink, Star, Trophy, Clock, Plus, MapPin } from "lucide-react";
@@ -190,7 +191,7 @@ export default async function GameDetailPage({
                     <div key={play.id} className="flex items-start gap-3 py-2 first:pt-0 last:pb-0">
                       <div className="flex-shrink-0 text-right" style={{ minWidth: "80px" }}>
                         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                          {new Intl.DateTimeFormat("it-IT", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(play.date))}
+                          {formatDay(play.date)}
                         </p>
                         {play.duration && (
                           <p className="text-xs flex items-center gap-0.5 justify-end" style={{ color: "var(--text-muted)" }}>

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { formatDay } from "@/lib/dates";
 import { Trophy, Clock, Dices, Users } from "lucide-react";
 import PlaysImporter from "@/components/PlaysImporter";
 import LogPlayModal from "@/components/LogPlayModal";
@@ -15,9 +16,7 @@ function formatDuration(mins: number): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
-function formatDate(date: Date): string {
-  return new Intl.DateTimeFormat("it-IT", { day: "2-digit", month: "short", year: "numeric" }).format(date);
-}
+const formatDate = formatDay;
 
 export default async function PlaysPage() {
   const [rawPlays, statPlays, topGames, settings, collectionGamesForLog, collectionGames] = await Promise.all([

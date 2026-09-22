@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { formatDayNum } from "@/lib/dates";
 import { parseStatusConfig, labelFor } from "@/lib/status";
 import StatCards from "./StatCards";
 import Charts from "./Charts";
@@ -114,7 +115,7 @@ export default async function StatisticsPage() {
           avgRating:        avgRating != null ? round2(avgRating) : null,
           dailySpend:       round2(dailySpend),
           daysOwned,
-          startDate:        collectionStart.toLocaleDateString("it-IT"),
+          startDate:        formatDayNum(collectionStart),
         }}
       />
 

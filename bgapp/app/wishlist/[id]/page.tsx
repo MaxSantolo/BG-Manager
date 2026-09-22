@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { APP_TZ, todayInput } from "@/lib/dates";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
@@ -120,7 +121,7 @@ export default async function WishlistDetailPage({
           <div>
             <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Data acquisto</label>
             <input name="purchaseDate" type="date" className="text-sm"
-              defaultValue={new Date().toISOString().split("T")[0]} />
+              defaultValue={todayInput(APP_TZ)} />
           </div>
           <button type="submit" className="btn-primary text-sm">
             <ShoppingCart size={14} /> Acquistato!

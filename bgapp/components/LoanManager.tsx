@@ -1,4 +1,5 @@
 "use client";
+import { formatDayNum, todayInput } from "@/lib/dates";
 
 import { useEffect, useRef, useState } from "react";
 import { Plus, RotateCcw, Trash2, BookOpen } from "lucide-react";
@@ -31,7 +32,7 @@ export default function LoanManager({ gameId, initialLoans }: Props) {
   const [loans, setLoans] = useState<Loan[]>(initialLoans);
   const [showForm, setShowForm] = useState(false);
   const [borrower, setBorrower] = useState("");
-  const [loanDate, setLoanDate] = useState(new Date().toISOString().split("T")[0]);
+  const [loanDate, setLoanDate] = useState(todayInput());
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -200,7 +201,7 @@ export default function LoanManager({ gameId, initialLoans }: Props) {
                 <div className="min-w-0">
                   <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{l.borrower}</span>
                   <span className="text-xs ml-2" style={{ color: "var(--text-muted)" }}>
-                    dal {new Date(l.loanDate).toLocaleDateString("it-IT")}
+                    dal {formatDayNum(l.loanDate)}
                   </span>
                   {l.notes && <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{l.notes}</p>}
                 </div>
@@ -234,8 +235,8 @@ export default function LoanManager({ gameId, initialLoans }: Props) {
                 <span>
                   {l.borrower}
                   <span className="text-xs ml-2" style={{ color: "var(--text-muted)" }}>
-                    {new Date(l.loanDate).toLocaleDateString("it-IT")}
-                    {l.returnDate && ` → ${new Date(l.returnDate).toLocaleDateString("it-IT")}`}
+                    {formatDayNum(l.loanDate)}
+                    {l.returnDate && ` → ${formatDayNum(l.returnDate)}`}
                   </span>
                 </span>
                 <button onClick={() => deleteLoan(l.id)} disabled={busyId === l.id} className="btn-ghost p-1">

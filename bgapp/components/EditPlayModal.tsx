@@ -1,4 +1,5 @@
 "use client";
+import { dayInput } from "@/lib/dates";
 
 import { useState } from "react";
 import { Pencil, Trash2, X, Save, Loader2, AlertCircle } from "lucide-react";
@@ -27,10 +28,6 @@ interface Props {
   winMode?: string | null;
 }
 
-function toDateInput(d: Date | string) {
-  return new Date(d).toISOString().split("T")[0];
-}
-
 const Label = ({ children }: { children: React.ReactNode }) => (
   <label className="field-label"
     style={{ color: "var(--text-secondary)" }}>{children}</label>
@@ -38,7 +35,7 @@ const Label = ({ children }: { children: React.ReactNode }) => (
 
 export default function EditPlayModal({ play, winMode }: Props) {
   const [open, setOpen]           = useState(false);
-  const [date, setDate]           = useState(toDateInput(play.date));
+  const [date, setDate]           = useState(dayInput(play.date));
   const [quantity, setQuantity]   = useState(String(play.quantity));
   const [duration, setDuration]   = useState(play.duration ? String(play.duration) : "");
   const [location, setLocation]   = useState(play.location ?? "");

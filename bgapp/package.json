@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "TZ=UTC next dev",
     "build": "npx prisma generate && next build",
-    "start": "next start",
+    "start": "TZ=UTC next start",
     "lint": "eslint",
     "db:migrate": "npx prisma migrate deploy",
     "db:generate": "npx prisma generate",

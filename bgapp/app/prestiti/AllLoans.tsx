@@ -1,4 +1,5 @@
 "use client";
+import { formatDayNum } from "@/lib/dates";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -146,8 +147,8 @@ export default function AllLoans({ initialLoans }: { initialLoans: Loan[] }) {
                       style={{ color: "var(--text-primary)", textDecoration: "none" }}>{l.game.name}</Link>
                   ) : <span style={{ color: "var(--text-muted)" }}>Gioco rimosso</span>}
                   <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    {l.borrower} · {new Date(l.loanDate).toLocaleDateString("it-IT")}
-                    {l.returnDate && ` → ${new Date(l.returnDate).toLocaleDateString("it-IT")}`}
+                    {l.borrower} · {formatDayNum(l.loanDate)}
+                    {l.returnDate && ` → ${formatDayNum(l.returnDate)}`}
                   </span>
                 </div>
                 <button onClick={() => deleteLoan(l.id)} disabled={busyId === l.id} className="btn-ghost p-1 flex-shrink-0">

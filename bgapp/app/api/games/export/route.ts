@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { formatDayNum } from "@/lib/dates";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -31,8 +32,8 @@ export async function GET(req: NextRequest) {
     g.status,
     g.cost?.toFixed(2) ?? "",
     g.salePrice?.toFixed(2) ?? "",
-    g.purchaseDate ? new Date(g.purchaseDate).toLocaleDateString("it-IT") : "",
-    g.saleDate ? new Date(g.saleDate).toLocaleDateString("it-IT") : "",
+    g.purchaseDate ? formatDayNum(g.purchaseDate) : "",
+    g.saleDate ? formatDayNum(g.saleDate) : "",
     g.insert,
     g.gameSleeves.map((gs) => `${gs.sleeve.label || gs.sleeve.size} x${gs.qty}`).join(" | "),
     g.bggRating?.toFixed(1) ?? "",
