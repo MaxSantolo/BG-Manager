@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Library, Heart, BarChart3, BookOpen, Package, LogOut, Menu, Dice5, Trophy, Settings, Users } from "lucide-react";
+import { Library, Heart, BarChart3, BookOpen, Package, LogOut, Menu, Dice5, Trophy, Settings, Users, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 const links = [
@@ -10,6 +10,7 @@ const links = [
   { href: "/decide", label: "Cosa giochiamo", icon: Dice5 },
   { href: "/wishlist", label: "Desiderata", icon: Heart },
   { href: "/plays", label: "Partite", icon: Trophy },
+  { href: "/mai-giocati", label: "Mai giocati", icon: Sparkles },
   { href: "/prestiti", label: "Prestiti", icon: BookOpen },
   { href: "/sleeves", label: "Bustine", icon: Package },
   { href: "/rubrica", label: "Rubrica", icon: Users },
@@ -51,14 +52,16 @@ export default function Navigation() {
         </Link>
 
         {/* Desktop menu */}
-        <div className="hidden sm:flex items-center gap-1 flex-1">
+        {/* Scorrevole invece che tagliata: con nove voci la riga non entra sotto
+            i ~1180px (iPad in orizzontale, laptop piccoli). */}
+        <div className="hidden sm:flex items-center gap-1 flex-1 min-w-0 overflow-x-auto nav-scroll">
           {links.map(({ href, label, icon: Icon }) => {
             const active = pathname.startsWith(href);
             return (
               <Link
                 key={href}
                 href={href}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap"
                 style={{
                   backgroundColor: active ? "rgba(192, 52, 52, 0.16)" : "transparent",
                   color: active ? "var(--text-primary)" : "var(--text-secondary)",

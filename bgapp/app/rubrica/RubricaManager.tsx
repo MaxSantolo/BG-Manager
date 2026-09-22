@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Trash2, Check, X, Loader2, MapPin, Merge } from "lucide-react";
+import { Pencil, Trash2, Check, X, Loader2, MapPin, Merge, Archive, Plus } from "lucide-react";
 import { Avatar } from "@/components/PlayerPicker";
 import { apiFetch } from "@/lib/fetchClient";
 
@@ -11,12 +11,36 @@ interface Player {
 interface Place {
   id: number; name: string; imageUrl: string | null; playCount: number;
 }
+interface Location {
+  id: number; name: string; gameCount: number;
+}
 
 export default function RubricaManager({
-  initialPlayers, initialPlaces,
-}: { initialPlayers: Player[]; initialPlaces: Place[] }) {
+  initialPlayers, initialPlaces, initialLocations,
+}: { initialPlayers: Player[]; initialPlaces: Place[]; initialLocations: Location[] }) {
   const [players, setPlayers] = useState(initialPlayers);
   const [places, setPlaces]   = useState(initialPlaces);
+  const [locations, setLocations] = useState(initialLocations);
+  const [newLocation, setNewLocation] = useState("");
+  const [addingLocation, setAddingLocation] = useState(false);
+
+  async function createLocation() {
+    const name = newLocation.trim();
+    if (!name) return;
+    setAddingLocation(true);
+    const res = await apiFetch<Location & { error?: string }>("/api/locations", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    setAddingLocation(false);
+    if (!res.ok || !res.data?.id) return;
+    const created = res.data;
+    setLocations(ls => ls.some(l => l.id === created.id)
+      ? ls
+      : [...ls, { id: created.id, name: created.name, gameCount: created.gameCount ?? 0 }]
+          .sort((a, b) => a.name.localeCompare(b.name)));
+    setNewLocation("");
+  }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -42,6 +66,31 @@ export default function RubricaManager({
           <PlaceRow key={pl.id} place={pl}
             onChange={u => setPlaces(ps => ps.map(x => x.id === u.id ? u : x))}
             onDelete={id => setPlaces(ps => ps.filter(x => x.id !== id))} />
+        ))}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold" style={{ color: "var(--text-secondary)" }}>
+          Posizioni ({locations.length})
+        </h2>
+        <div className="card flex items-center gap-2">
+          <input type="text" value={newLocation} onChange={e => setNewLocation(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); createLocation(); } }}
+            placeholder="es. Scaffale salotto, ripiano 2" className="w-full text-sm" />
+          <button type="button" onClick={createLocation} disabled={addingLocation || !newLocation.trim()}
+            className="btn-primary text-sm flex-shrink-0">
+            {addingLocation ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Aggiungi
+          </button>
+        </div>
+        {locations.length === 0 && (
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+            Nessuna posizione. Puoi crearle anche dalla scheda di un gioco.
+          </p>
+        )}
+        {locations.map(l => (
+          <LocationRow key={l.id} location={l}
+            onChange={u => setLocations(ls => ls.map(x => x.id === u.id ? { ...x, ...u } : x))}
+            onDelete={id => setLocations(ls => ls.filter(x => x.id !== id))} />
         ))}
       </section>
     </div>
@@ -226,6 +275,83 @@ function PlaceRow({ place, onChange, onDelete }: {
               {busy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Salva
             </button>
             <button type="button" onClick={() => { setEditing(false); setName(place.name); setImg(place.imageUrl ?? ""); setErr(null); }}
+              className="btn-secondary text-sm flex items-center gap-1.5"><X size={13} /> Annulla</button>
+          </div>
+        </div>
+      )}
+      {!editing && err && <p className="text-xs" style={{ color: "var(--accent-red-light)" }}>{err}</p>}
+    </div>
+  );
+}
+
+function LocationRow({ location, onChange, onDelete }: {
+  location: Location; onChange: (l: Location) => void; onDelete: (id: number) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName]       = useState(location.name);
+  const [busy, setBusy]       = useState(false);
+  const [err, setErr]         = useState<string | null>(null);
+
+  async function save() {
+    if (!name.trim()) { setErr("Nome richiesto"); return; }
+    setBusy(true); setErr(null);
+    const res = await apiFetch<Location & { error?: string }>(`/api/locations/${location.id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    setBusy(false);
+    if (res.timedOut || res.networkError) { setErr("Connessione assente. Riprova."); return; }
+    if (!res.ok || !res.data || res.data.error) { setErr(res.data?.error ?? "Errore"); return; }
+    onChange({ ...location, name: res.data.name });
+    setEditing(false);
+  }
+
+  async function remove() {
+    const n = location.gameCount;
+    const warn = n > 0
+      ? `Eliminare "${location.name}"? ${n} ${n === 1 ? "gioco resterà" : "giochi resteranno"} senza posizione.`
+      : `Eliminare "${location.name}"?`;
+    if (!confirm(warn)) return;
+    setBusy(true);
+    const res = await apiFetch(`/api/locations/${location.id}`, { method: "DELETE" });
+    setBusy(false);
+    if (res.ok) onDelete(location.id); else setErr("Eliminazione non riuscita.");
+  }
+
+  return (
+    <div className="card space-y-2">
+      <div className="flex items-center gap-3">
+        <div className="w-[34px] h-[34px] rounded flex items-center justify-center flex-shrink-0"
+          style={{ backgroundColor: "var(--bg-elevated)" }}>
+          <Archive size={16} style={{ color: "var(--text-muted)" }} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{location.name}</p>
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            {location.gameCount} {location.gameCount === 1 ? "gioco" : "giochi"}
+          </p>
+        </div>
+        {!editing && (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button type="button" onClick={() => setEditing(true)} className="btn-ghost p-1.5" title="Modifica" disabled={busy}>
+              <Pencil size={14} style={{ color: "var(--text-muted)" }} />
+            </button>
+            <button type="button" onClick={remove} className="btn-ghost p-1.5" title="Elimina" disabled={busy}>
+              {busy ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} style={{ color: "var(--accent-red-light)" }} />}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {editing && (
+        <div className="space-y-2 pt-1">
+          <Field label="Nome" value={name} onChange={e => setName(e.target.value)} />
+          {err && <p className="text-xs" style={{ color: "var(--accent-red-light)" }}>{err}</p>}
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={save} disabled={busy} className="btn-primary text-sm flex items-center gap-1.5">
+              {busy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Salva
+            </button>
+            <button type="button" onClick={() => { setEditing(false); setName(location.name); setErr(null); }}
               className="btn-secondary text-sm flex items-center gap-1.5"><X size={13} /> Annulla</button>
           </div>
         </div>

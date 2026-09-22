@@ -110,6 +110,11 @@ body {
   padding-right:  calc(1rem + env(safe-area-inset-right));
 }
 
+/* La barra di navigazione scorre in orizzontale quando le voci non entrano,
+   senza mostrare una scrollbar che sporcherebbe la barra. */
+.nav-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+.nav-scroll::-webkit-scrollbar { display: none; }
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg-base); }

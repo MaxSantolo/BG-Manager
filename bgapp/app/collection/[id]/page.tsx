@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, ExternalLink, Star, Trophy, Clock, Plus } from "lucide-react";
+import { ChevronLeft, ExternalLink, Star, Trophy, Clock, Plus, MapPin } from "lucide-react";
 import GameForm from "@/components/GameForm";
 import LoanManager from "@/components/LoanManager";
 import LogPlayModal from "@/components/LogPlayModal";
@@ -23,6 +23,7 @@ export default async function GameDetailPage({
       include: {
         gameSleeves: { include: { sleeve: true } },
         loans: { orderBy: { loanDate: "desc" } },
+        location: { select: { id: true, name: true } },
       },
     }),
     prisma.play.findMany({
@@ -55,6 +56,11 @@ export default async function GameDetailPage({
               <span className="badge bg-amber-900 text-amber-200">In prestito</span>
             )}
             <span className="text-xs" style={{ color: "var(--text-muted)" }}>{game.type}</span>
+            {game.location && (
+              <span className="text-xs inline-flex items-center gap-1" style={{ color: "var(--text-secondary)" }}>
+                <MapPin size={11} style={{ color: "var(--text-muted)" }} /> {game.location.name}
+              </span>
+            )}
             {game.yearPublished && (
               <span className="text-xs" style={{ color: "var(--text-muted)" }}>{game.yearPublished}</span>
             )}

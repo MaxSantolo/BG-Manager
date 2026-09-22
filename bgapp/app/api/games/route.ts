@@ -94,6 +94,8 @@ export async function POST(request: NextRequest) {
         salePrice:    body.salePrice != null ? parseFloat(body.salePrice) : null,
         status:       body.status          || "InCollezione",
         winMode:      body.winMode          || "high",
+        playedBefore: body.playedBefore === true,
+        locationId:   body.locationId != null ? parseInt(body.locationId) : null,
         insert:       body.insert          || "No",
         purchaseDate: body.purchaseDate    ? new Date(body.purchaseDate) : null,
         saleDate:     body.saleDate        ? new Date(body.saleDate) : null,

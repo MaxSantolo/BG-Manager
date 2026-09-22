@@ -113,6 +113,8 @@ export async function PUT(
         salePrice:    body.salePrice != null ? parseFloat(body.salePrice) : null,
         status:       body.status,
         winMode:      body.winMode ?? undefined,
+        playedBefore: typeof body.playedBefore === "boolean" ? body.playedBefore : undefined,
+        locationId:   "locationId" in body ? (body.locationId != null ? parseInt(body.locationId) : null) : undefined,
         ...(relinked ? { bggCollId: null } : {}),
         insert:       body.insert,
         purchaseDate: body.purchaseDate   ? new Date(body.purchaseDate) : null,
@@ -189,13 +191,24 @@ export async function PATCH(
 ) {
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
-  if (typeof body?.winMode !== "string")
-    return NextResponse.json({ error: "winMode richiesto" }, { status: 400 });
+
+  // Only the small, self-contained fields the UI flips from outside the full
+  // form: the winner rule (play modal) and the never-played / position fields
+  // (games list, "mai giocati" page). Anything omitted is left untouched.
+  const data: { winMode?: string; playedBefore?: boolean; locationId?: number | null } = {};
+  if (typeof body?.winMode === "string") data.winMode = asWinMode(body.winMode);
+  if (typeof body?.playedBefore === "boolean") data.playedBefore = body.playedBefore;
+  if ("locationId" in body)
+    data.locationId = body.locationId == null ? null : parseInt(body.locationId);
+
+  if (Object.keys(data).length === 0)
+    return NextResponse.json({ error: "nessun campo aggiornabile nel corpo" }, { status: 400 });
+
   try {
     const game = await prisma.game.update({
       where: { id: parseInt(id) },
-      data:  { winMode: asWinMode(body.winMode) },
-      select: { winMode: true },
+      data,
+      select: { winMode: true, playedBefore: true, locationId: true },
     });
     return NextResponse.json(game);
   } catch (err) {

@@ -27,6 +27,7 @@ interface Game {
   bggRating: number | null;
   gameSleeves?: GameSleeve[];
   loans?: { id: number }[];
+  location?: { id: number; name: string } | null;
 }
 
 const PAGE_SIZES = [20, 40, 100];
@@ -49,8 +50,10 @@ interface Props {
   initialSearch: string;
   initialStatus: string;
   initialType: string;
+  initialLocation: string;
   initialLimit: number;
   initialSort: string;
+  locations: { id: number; name: string }[];
 }
 
 export default function CollectionTable({
@@ -61,8 +64,10 @@ export default function CollectionTable({
   initialSearch,
   initialStatus,
   initialType,
+  initialLocation,
   initialLimit,
   initialSort,
+  locations,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -73,15 +78,17 @@ export default function CollectionTable({
   const [search, setSearch] = useState(initialSearch);
   const [status, setStatus] = useState(initialStatus);
   const [type, setType]     = useState(initialType);
+  const [location, setLocation] = useState(initialLocation);
   const [limit, setLimit]   = useState(initialLimit);
   const [sort, setSort]     = useState(initialSort);
 
   function buildParams(overrides: Record<string, string>) {
-    const merged = { search, status, type, page: String(page), limit: String(limit), sort, ...overrides };
+    const merged = { search, status, type, location, page: String(page), limit: String(limit), sort, ...overrides };
     const p = new URLSearchParams();
     if (merged.search) p.set("search", merged.search);
     if (merged.status) p.set("status", merged.status);
     if (merged.type)   p.set("type",   merged.type);
+    if (merged.location) p.set("location", merged.location);
     if (merged.page && merged.page !== "1") p.set("page", merged.page);
     if (merged.limit && merged.limit !== "20") p.set("limit", merged.limit);
     if (merged.sort && merged.sort !== "name_asc") p.set("sort", merged.sort);
@@ -110,6 +117,7 @@ export default function CollectionTable({
 
   function onStatus(val: string) { setStatus(val); push({ status: val, page: "1" }); }
   function onType(val: string)   { setType(val);   push({ type:   val, page: "1" }); }
+  function onLocation(val: string) { setLocation(val); push({ location: val, page: "1" }); }
   function onSort(val: string)   { setSort(val);   push({ sort:   val, page: "1" }); }
   function onLimit(val: number)  { setLimit(val);  push({ limit: String(val), page: "1" }); }
   function goPage(p: number)     { push({ page: String(p) }); }
@@ -146,6 +154,14 @@ export default function CollectionTable({
             <option key={t} value={t}>{t}</option>
           ))}
         </select>
+        {locations.length > 0 && (
+          <select value={location} onChange={(e) => onLocation(e.target.value)} className="text-sm w-full sm:w-auto">
+            <option value="">Tutte le posizioni</option>
+            {locations.map((l) => (
+              <option key={l.id} value={l.id}>{l.name}</option>
+            ))}
+          </select>
+        )}
         <select value={sort} onChange={(e) => onSort(e.target.value)} className="text-sm w-full sm:w-auto">
           {SORT_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
@@ -190,6 +206,7 @@ export default function CollectionTable({
               <th>Stato</th>
               <th className="text-right">Costo</th>
               <th className="text-right">Vendita</th>
+              <th>Posizione</th>
               <th>Inserto</th>
               <th>Bustine</th>
               <th>Rating</th>
@@ -199,7 +216,7 @@ export default function CollectionTable({
           <tbody>
             {games.length === 0 && (
               <tr>
-                <td colSpan={9} className="text-center py-8" style={{ color: "var(--text-muted)" }}>
+                <td colSpan={10} className="text-center py-8" style={{ color: "var(--text-muted)" }}>
                   Nessun gioco trovato
                 </td>
               </tr>
@@ -236,6 +253,9 @@ export default function CollectionTable({
                 </td>
                 <td className="text-right text-sm">
                   {game.salePrice != null ? `€${game.salePrice.toFixed(2)}` : <span style={{ color: "var(--text-muted)" }}>—</span>}
+                </td>
+                <td className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                  {game.location?.name ?? <span style={{ color: "var(--text-muted)" }}>—</span>}
                 </td>
                 <td className="text-sm" style={{ color: "var(--text-secondary)" }}>{game.insert}</td>
                 <td className="text-sm" style={{ color: "var(--text-secondary)" }}>

@@ -7,6 +7,7 @@ import { Save, Loader2, RefreshCw, ExternalLink, User, Calendar, AlertTriangle }
 import BggSearch from "@/components/BggSearch";
 import SleeveEditor from "@/components/SleeveEditor";
 import DateInput from "@/components/DateInput";
+import LocationPicker from "@/components/LocationPicker";
 import { useToast } from "@/components/Toast";
 import type { BggGameDetail } from "@/lib/bgg";
 import { apiFetch } from "@/lib/fetchClient";
@@ -67,6 +68,10 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
   const [type, setType]             = useState(String(initialData?.type ?? "Base"));
   const [status, setStatus]         = useState(String(initialData?.status ?? (isWishlist ? "" : "InCollezione")));
   const [winMode, setWinMode]       = useState(asWinMode(initialData?.winMode as string | undefined));
+  const [locationId, setLocationId] = useState<number | null>(
+    initialData?.locationId != null ? Number(initialData.locationId) : null
+  );
+  const [playedBefore, setPlayedBefore] = useState(initialData?.playedBefore === true);
   const [cost, setCost]             = useState(String(initialData?.cost ?? ""));
   const [salePrice, setSalePrice]   = useState(String(initialData?.salePrice ?? ""));
   const [insert, setInsert]         = useState(String(initialData?.insert ?? "No"));
@@ -199,6 +204,8 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
     } else {
       payload.status       = status;
       payload.winMode      = winMode;
+      payload.locationId   = locationId;
+      payload.playedBefore = playedBefore;
       payload.cost         = cost || null;
       payload.salePrice    = salePrice || null;
       payload.purchaseDate = purchaseDate || null;
@@ -447,6 +454,22 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
                 <select value={winMode} onChange={e => setWinMode(asWinMode(e.target.value))} className="w-full">
                   {WIN_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                 </select>
+              </div>
+              <div className="sm:col-span-2">
+                <Label>Posizione</Label>
+                <LocationPicker value={locationId} onChange={setLocationId} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input type="checkbox" className="mt-0.5" checked={playedBefore}
+                    onChange={e => setPlayedBefore(e.target.checked)} />
+                  <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                    Già giocato, partite non registrate
+                    <span className="block text-xs" style={{ color: "var(--text-muted)" }}>
+                      Lo toglie dall&apos;elenco &laquo;mai giocati&raquo; anche senza partite a registro.
+                    </span>
+                  </span>
+                </label>
               </div>
               <div>
                 <Label>Costo acquisto (€)</Label>

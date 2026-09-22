@@ -20,6 +20,7 @@ interface GameCardProps {
   bggRating: number | null;
   gameSleeves?: GameSleeve[];
   loans?: { id: number }[];
+  location?: { id: number; name: string } | null;
   fromUrl?: string;
 }
 
@@ -36,6 +37,7 @@ export default function GameCard({
   bggRating,
   gameSleeves,
   loans,
+  location,
   fromUrl,
 }: GameCardProps) {
   return (
@@ -70,7 +72,8 @@ export default function GameCard({
           {loans && loans.length > 0 && <span className="badge bg-amber-900 text-amber-200">In prestito</span>}
           {cost != null && <span>Costo: €{cost.toFixed(2)}</span>}
           {salePrice != null && <span>Vendita: €{salePrice.toFixed(2)}</span>}
-{insert && <span>Inserto: {insert}</span>}
+{location && <span>Posizione: {location.name}</span>}
+          {insert && <span>Inserto: {insert}</span>}
           {gameSleeves && gameSleeves.length > 0 && (
             <span>Bustine: {gameSleeves.map(gs => `${gs.sleeve.size}${gs.sleeve.label ? ` (${gs.sleeve.label})` : ""} ×${gs.qty}`).join(", ")}</span>
           )}

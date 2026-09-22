@@ -9,6 +9,7 @@ interface SearchParams {
   search?: string;
   status?: string;
   type?: string;
+  location?: string;
   page?: string;
   limit?: string;
   sort?: string;
@@ -19,7 +20,7 @@ export default async function CollectionPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const { search = "", status = "", type = "", page = "1", limit: limitParam = "20", sort = "name_asc" } = await searchParams;
+  const { search = "", status = "", type = "", location = "", page = "1", limit: limitParam = "20", sort = "name_asc" } = await searchParams;
   const pageNum = Math.max(1, parseInt(page) || 1);
   const limit   = [20, 40, 100].includes(parseInt(limitParam)) ? parseInt(limitParam) : 20;
   const skip    = (pageNum - 1) * limit;
@@ -44,9 +45,10 @@ export default async function CollectionPage({
     // scegliendoli dal filtro stati.
     ...(status ? { status } : { status: { notIn: ["Venduto", "GiocatoEsterno"] } }),
     ...(type   ? { type }   : {}),
+    ...(location ? { locationId: parseInt(location) } : {}),
   };
 
-  const [games, total, unenriched, settings] = await Promise.all([
+  const [games, total, unenriched, settings, locations] = await Promise.all([
     prisma.game.findMany({
       where,
       orderBy,
@@ -55,11 +57,13 @@ export default async function CollectionPage({
       include: {
         gameSleeves: { include: { sleeve: true } },
         loans: { where: { returned: false }, select: { id: true } },
+        location: { select: { id: true, name: true } },
       },
     }),
     prisma.game.count({ where }),
     prisma.game.count({ where: { bggId: { not: null }, OR: [{ thumbnail: null }, { description: null }] } }),
     prisma.settings.findUnique({ where: { id: 1 } }),
+    prisma.location.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
 
   const totalPages = Math.ceil(total / limit);
@@ -94,6 +98,8 @@ export default async function CollectionPage({
         initialSearch={search}
         initialStatus={status}
         initialType={type}
+        initialLocation={location}
+        locations={locations}
         initialLimit={limit}
         initialSort={sort}
       />

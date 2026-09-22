@@ -19,6 +19,12 @@ model Game {
   cost          Float?
   salePrice     Float?
   status        String    @default("InCollezione")
+  /// "Mai giocato" is derived from the plays; this only covers the games played
+  /// before plays were tracked, so the derived value can be corrected by hand.
+  playedBefore  Boolean   @default(false)
+  /// Where the box physically is. Optional, free registry (see Location).
+  locationId    Int?
+  location      Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
   /// How the winner of a play is decided: high|low (auto from scores),
   /// coop (shared win/loss), manual (tick winners by hand). See lib/winner.ts.
   winMode       String    @default("high")
@@ -48,6 +54,7 @@ model Game {
 
   @@index([bggId])
   @@index([status])
+  @@index([locationId])
 }
 
 model WishlistGame {
@@ -165,6 +172,17 @@ model Place {
   name      String   @unique
   imageUrl  String?
   playCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Where boxes live: a shelf, a cupboard, a box in the attic. Free registry the
+/// user creates from the game form; deleting one just clears it on its games.
+model Location {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  notes     String?
+  games     Game[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
