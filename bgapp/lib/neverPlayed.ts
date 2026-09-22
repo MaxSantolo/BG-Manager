@@ -10,13 +10,17 @@ import { prisma } from "@/lib/prisma";
  *  - `playedBefore` is the manual escape hatch for games played before plays
  *    were tracked, so the derived answer stays derived and still correctable.
  *
- * Sold and guest games are out: this is about the boxes on the shelf. So are
- * expansions — they're played inside their base game and would never have plays
- * of their own, so they'd just pad the list ("Base + Espansione" stays: it IS a
- * base game).
+ * What counts is a box you own, that is in the house, and that can be played on
+ * its own. So three kinds of rows are out, and this filter is deliberately
+ * STRICTER than the dashboard's ON_THE_SHELF (which keeps pre-orders in the
+ * collection on purpose):
+ *  - sold and guest games: not yours to play tonight;
+ *  - pre-orders: the box hasn't arrived, "never played" says nothing about it;
+ *  - expansions: they're played inside their base game and would never have
+ *    plays of their own ("Base + Espansione" stays, it IS a base game).
  */
-const ON_THE_SHELF = {
-  status: { notIn: ["Venduto", "GiocatoEsterno"] },
+const PLAYABLE_BOX = {
+  status: { notIn: ["Venduto", "GiocatoEsterno", "Preordinato"] },
   type: { not: "Espansione" },
 };
 
@@ -25,7 +29,7 @@ export async function findNeverPlayed() {
     prisma.play.groupBy({ by: ["gameId"], where: { gameId: { not: null } } }),
     prisma.play.groupBy({ by: ["bggGameId"], where: { bggGameId: { not: null } } }),
     prisma.game.findMany({
-      where: { ...ON_THE_SHELF, playedBefore: false },
+      where: { ...PLAYABLE_BOX, playedBefore: false },
       include: { location: { select: { id: true, name: true } } },
       orderBy: { name: "asc" },
     }),
