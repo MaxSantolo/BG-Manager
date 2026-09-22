@@ -15,8 +15,9 @@ export default async function NeverPlayedPage() {
           <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>Mai giocati</h1>
         </div>
         <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
-          Giochi in casa senza nessuna partita registrata. Se uno l&apos;hai giocato prima di
-          tenere il registro, segnalo: sparisce da qui e resta segnato sulla scheda.
+          Giochi in casa senza nessuna partita registrata, espansioni escluse. Se uno
+          l&apos;hai giocato prima di tenere il registro, segnalo: sparisce da qui e resta
+          segnato sulla scheda.
         </p>
       </div>
       <NeverPlayedList

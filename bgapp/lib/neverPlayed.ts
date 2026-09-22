@@ -10,9 +10,15 @@ import { prisma } from "@/lib/prisma";
  *  - `playedBefore` is the manual escape hatch for games played before plays
  *    were tracked, so the derived answer stays derived and still correctable.
  *
- * Sold and guest games are out: this is about the boxes on the shelf.
+ * Sold and guest games are out: this is about the boxes on the shelf. So are
+ * expansions — they're played inside their base game and would never have plays
+ * of their own, so they'd just pad the list ("Base + Espansione" stays: it IS a
+ * base game).
  */
-const ON_THE_SHELF = { status: { notIn: ["Venduto", "GiocatoEsterno"] } };
+const ON_THE_SHELF = {
+  status: { notIn: ["Venduto", "GiocatoEsterno"] },
+  type: { not: "Espansione" },
+};
 
 export async function findNeverPlayed() {
   const [playedByGameId, playedByBggId, games] = await Promise.all([
@@ -29,8 +35,4 @@ export async function findNeverPlayed() {
   const byBggId = new Set(playedByBggId.map((r) => r.bggGameId!));
 
   return games.filter((g) => !byGameId.has(g.id) && !(g.bggId != null && byBggId.has(g.bggId)));
-}
-
-export async function countNeverPlayed(): Promise<number> {
-  return (await findNeverPlayed()).length;
 }
