@@ -7,7 +7,7 @@ import Charts from "./Charts";
 export const dynamic = "force-dynamic";
 
 export default async function StatisticsPage() {
-  const [allGames, wishlistCount, sleeveUsageRaw, firstPlay, settings] = await Promise.all([
+  const [allGames, wishlistCount, sleeveUsageRaw, firstPlay, settings, plays] = await Promise.all([
     prisma.game.findMany(),
     prisma.wishlistGame.count(),
     prisma.gameSleeve.groupBy({
@@ -19,6 +19,7 @@ export default async function StatisticsPage() {
     }),
     prisma.play.aggregate({ _min: { date: true } }),
     prisma.settings.findUnique({ where: { id: 1 }, select: { statusConfig: true } }),
+    prisma.play.findMany({ select: { gameId: true, bggGameId: true, gameName: true, quantity: true } }),
   ]);
 
   const statusConfig = parseStatusConfig(settings?.statusConfig);
@@ -52,6 +53,8 @@ export default async function StatisticsPage() {
   const collectionStart   = startCandidates.length > 0 ? new Date(Math.min(...startCandidates)) : new Date();
   const daysOwned         = Math.max(1, Math.floor((Date.now() - collectionStart.getTime()) / 86_400_000));
   const dailySpend        = totalInvested / daysOwned;
+
+  const hIndex = buildHIndex(plays, allGames);
 
   const typeBreakdown = allGames.reduce(
     (acc, g) => { acc[g.type] = (acc[g.type] ?? 0) + 1; return acc; },
@@ -117,6 +120,7 @@ export default async function StatisticsPage() {
           daysOwned,
           startDate:        formatDayNum(collectionStart),
         }}
+        plays={hIndex}
       />
 
       <Charts
@@ -137,6 +141,51 @@ export default async function StatisticsPage() {
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
+}
+
+/**
+ * H-index alla BoardGameGeek: il numero H piu' alto per cui esistono almeno H
+ * giochi giocati almeno H volte ciascuno. Misura l'ampiezza di una collezione
+ * davvero giocata, non quanto e' grande: comprare non lo alza, rigiocare si'.
+ *
+ * Due dettagli che cambiano il risultato:
+ *  - una riga Play puo' valere piu' partite (quantity), ed e' cosi' che le
+ *    conta BGG;
+ *  - una partita punta al gioco per gameId OPPURE, quando il sync non l'ha
+ *    risolto, solo per bggGameId o per nome (30 righe su 337). Contarle come
+ *    giochi diversi spezzerebbe in due lo storico di un gioco e abbasserebbe
+ *    l'indice, quindi bggGameId viene ricondotto al gioco locale quando esiste.
+ */
+function buildHIndex(
+  plays: { gameId: number | null; bggGameId: number | null; gameName: string; quantity: number }[],
+  games: { id: number; bggId: number | null }[],
+) {
+  const gameIdByBggId = new Map<number, number>();
+  for (const g of games) if (g.bggId != null) gameIdByBggId.set(g.bggId, g.id);
+
+  const countByGame = new Map<string, number>();
+  for (const p of plays) {
+    const key =
+      p.gameId != null                              ? `g:${p.gameId}` :
+      p.bggGameId != null                           ? `g:${gameIdByBggId.get(p.bggGameId) ?? `b:${p.bggGameId}`}` :
+      `n:${p.gameName.trim().toLowerCase()}`;
+    countByGame.set(key, (countByGame.get(key) ?? 0) + Math.max(1, p.quantity));
+  }
+
+  const counts = [...countByGame.values()].sort((a, b) => b - a);
+  let h = 0;
+  while (h < counts.length && counts[h] >= h + 1) h++;
+
+  // Quanto manca al gradino dopo: per H+1 servono H+1 giochi con H+1 partite.
+  const readyForNext = counts.filter((c) => c >= h + 1).length;
+
+  return {
+    hIndex: h,
+    totalPlays: counts.reduce((a, b) => a + b, 0),
+    gamesPlayed: counts.length,
+    nextH: h + 1,
+    readyForNext,
+  };
 }
 
 function buildCostByYear(games: { purchaseDate: Date | null; cost: number | null; saleDate: Date | null; salePrice: number | null }[]) {

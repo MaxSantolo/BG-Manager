@@ -18,6 +18,13 @@ interface Props {
     daysOwned: number;
     startDate: string;
   };
+  plays: {
+    hIndex: number;
+    totalPlays: number;
+    gamesPlayed: number;
+    nextH: number;
+    readyForNext: number;
+  };
 }
 
 function StatCard({ label, value, sub, accent }: {
@@ -39,8 +46,10 @@ function StatCard({ label, value, sub, accent }: {
   );
 }
 
-export default function StatCards({ totals, finances }: Props) {
+export default function StatCards({ totals, finances, plays }: Props) {
   const profitPositive = finances.totalProfit >= 0;
+  // Per salire a H+1 servono H+1 giochi con H+1 partite: quanti ne mancano.
+  const missingForNext = Math.max(0, plays.nextH - plays.readyForNext);
 
   return (
     <div className="space-y-4">
@@ -52,6 +61,23 @@ export default function StatCards({ totals, finances }: Props) {
         <StatCard label="Preordinati"   value={totals.preordered} />
         <StatCard label="Venduti"       value={totals.sold} />
         <StatCard label="Wishlist"      value={totals.wishlist} />
+      </div>
+
+      {/* Partite */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <StatCard
+          label="H-index"
+          value={plays.hIndex}
+          sub={plays.gamesPlayed === 0
+            ? "Nessuna partita registrata"
+            : `Ancora ${missingForNext} ${missingForNext === 1 ? "gioco" : "giochi"} a ${plays.nextH}+ partite per arrivare a ${plays.nextH}`}
+          accent
+        />
+        <StatCard
+          label="Partite giocate"
+          value={plays.totalPlays}
+          sub={`${plays.gamesPlayed} giochi diversi`}
+        />
       </div>
 
       {/* Finanze */}
