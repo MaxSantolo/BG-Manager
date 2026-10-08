@@ -474,7 +474,14 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
               <div>
                 <Label>Prezzo vendita (€)</Label>
                 <input type="number" step="0.01" min="0" value={salePrice}
-                  onChange={e => setSalePrice(e.target.value)} className="w-full" placeholder="0.00" />
+                  onChange={e => {
+                    const v = e.target.value;
+                    setSalePrice(v);
+                    // Un prezzo di vendita = venduto: lo stato segue subito.
+                    // Solo in avanti, così cancellare il prezzo non forza di nuovo lo stato.
+                    if (parseFloat(v) > 0 && status !== "Venduto") setStatus("Venduto");
+                  }}
+                  className="w-full" placeholder="0.00" />
               </div>
               <div>
                 <Label>Data acquisto</Label>

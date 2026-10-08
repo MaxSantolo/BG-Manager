@@ -82,6 +82,15 @@ export async function PUT(
   const newBggId = body.bggId != null ? parseInt(body.bggId) : null;
   const relinked = before != null && newBggId !== before.bggId;
 
+  // Un prezzo di vendita significa: venduto. La regola vive qui, non solo nel
+  // form, cosi' vale per qualunque canale che scriva salePrice. Solo in avanti:
+  // togliere il prezzo NON riporta indietro lo stato (richiederebbe di sapere
+  // qual era prima, che non teniamo). Lo stato Venduto raggiunge poi BGG come
+  // prevowned attraverso la stessa spinta di una modifica di stato manuale.
+  const salePriceNum = body.salePrice != null ? parseFloat(body.salePrice) : null;
+  const resolvedStatus =
+    salePriceNum != null && salePriceNum > 0 ? "Venduto" : body.status;
+
   // Re-linking to a bggId already owned by another game (or on the wishlist)
   // would violate one-row-per-BGG-id — reject before writing.
   if (relinked && newBggId != null) {
@@ -110,8 +119,8 @@ export async function PUT(
         name:         body.name,
         type:         body.type,
         cost:         body.cost != null    ? parseFloat(body.cost) : null,
-        salePrice:    body.salePrice != null ? parseFloat(body.salePrice) : null,
-        status:       body.status,
+        salePrice:    salePriceNum,
+        status:       resolvedStatus,
         winMode:      body.winMode ?? undefined,
         playedBefore: typeof body.playedBefore === "boolean" ? body.playedBefore : undefined,
         locationId:   "locationId" in body ? (body.locationId != null ? parseInt(body.locationId) : null) : undefined,
