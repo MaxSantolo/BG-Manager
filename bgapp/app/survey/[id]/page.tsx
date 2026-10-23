@@ -136,6 +136,15 @@ export default function SurveyDetailPage() {
     else show(res.data?.error ?? "Non riuscito", "error");
   }
 
+  async function removeOption(opt: OptionResult) {
+    if (!identity) { show("Dì prima chi sei.", "error"); return; }
+    if (!confirm(`Togliere "${opt.gameName}" dalle proposte? Spariscono anche i suoi voti.`)) return;
+    const res = await apiFetch<{ error?: string }>(
+      `/api/survey/surveys/${surveyId}/options/${opt.id}?actorId=${identity.id}`, { method: "DELETE" });
+    if (res.ok) { show("Gioco tolto"); load(); }
+    else show(res.data?.error ?? "Non riuscito", "error");
+  }
+
   async function removeSurvey() {
     if (!survey || !identity) return;
     if (!confirm("Eliminare il sondaggio? Spariscono proposte e voti.")) return;
@@ -258,7 +267,7 @@ export default function SurveyDetailPage() {
                       {opt.avgRating != null && <> · <Star size={10} className="inline" style={{ color: "#f5b301" }} /> {opt.avgRating} ({opt.ratingCount})</>}
                     </p>
                     {(votesByOption.get(opt.id)?.length ?? 0) > 0 && (
-                      <p className="text-xs mt-0.5 truncate" style={{ color: "var(--accent-blue-light)" }}>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--accent-blue-light)", overflowWrap: "anywhere" }}>
                         voti: {votesByOption.get(opt.id)!
                           .map(v => v.rating != null ? `${v.voterName} (${v.rating}★)` : v.voterName)
                           .join(", ")}
@@ -268,6 +277,13 @@ export default function SurveyDetailPage() {
                   <span className="text-lg font-bold flex-shrink-0 tabular-nums" style={{ color: "var(--text-primary)" }}>
                     {opt.votes}
                   </span>
+                  {open && identity != null && (opt.proposedById === identity.id || survey.createdById === identity.id) && (
+                    <button type="button" onClick={e => { e.stopPropagation(); removeOption(opt); }}
+                      className="btn-ghost p-1 flex-shrink-0" aria-label="Togli gioco"
+                      title="Togli questo gioco dalle proposte" style={{ color: "var(--text-muted)" }}>
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </div>
                 {/* selettore stelle: appare quando il gioco è tra le mie scelte */}
                 {picked && open && (
@@ -299,40 +315,59 @@ export default function SurveyDetailPage() {
         </button>
       )}
 
-      {/* Classifica: totale voti + totale stelle */}
-      {results.length > 0 && (
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-          <table className="data-table w-full text-sm">
-            <thead>
-              <tr>
-                <th style={{ textAlign: "left" }}>#</th>
-                <th style={{ textAlign: "left" }}>Gioco</th>
-                <th style={{ textAlign: "right" }}>Voti</th>
-                <th style={{ textAlign: "right" }}>★ tot</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ranked.map((opt, i) => {
-                const winner = winCut != null && i < winCut && opt.votes > 0;
-                return (
-                  <tr key={opt.id} style={winner ? { backgroundColor: "var(--bg-elevated)" } : undefined}>
-                    <td style={{ color: "var(--text-muted)" }} className="tabular-nums">
-                      {winner ? <Trophy size={12} className="inline" style={{ color: "#f5b301" }} /> : i + 1}
-                    </td>
-                    <td style={{ color: "var(--text-primary)" }} className="truncate">{opt.gameName}</td>
-                    <td style={{ textAlign: "right", color: "var(--text-secondary)" }} className="tabular-nums">{opt.votes}</td>
-                    <td style={{ textAlign: "right", color: "var(--text-secondary)" }} className="tabular-nums">
-                      {opt.ratingSum > 0
-                        ? <><Star size={11} className="inline" style={{ color: "#f5b301" }} fill="#f5b301" /> {opt.ratingSum}{opt.avgRating != null ? ` (${opt.avgRating})` : ""}</>
-                        : <span style={{ color: "var(--text-muted)" }}>—</span>}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      {/* Classifica (durante) / Risultato finale (a sondaggio chiuso) */}
+      {results.length > 0 && (() => {
+        const winners = winCut != null ? ranked.filter((o, i) => i < winCut && o.votes > 0) : [];
+        return (
+        <div className="card" style={{ padding: 0, overflow: "hidden",
+          borderColor: open ? undefined : "var(--accent-red)", borderWidth: open ? undefined : 2 }}>
+          {/* titolo: cambia a chiusura */}
+          <div className="flex items-center gap-2 px-3 py-2"
+            style={{ borderBottom: "1px solid var(--border)",
+              backgroundColor: open ? undefined : "var(--accent-blue)" }}>
+            <Trophy size={15} style={{ color: open ? "var(--accent-red-light)" : "#fff" }} />
+            <span className="font-semibold text-sm" style={{ color: open ? "var(--text-primary)" : "#fff" }}>
+              {open ? "Classifica" : "Risultato finale"}
+            </span>
+            {!open && <span className="text-xs ml-auto" style={{ color: "rgba(255,255,255,0.8)" }}>sondaggio chiuso</span>}
+          </div>
+          {/* intestazione colonne */}
+          <div className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold"
+            style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--border)" }}>
+            <span className="w-5 flex-shrink-0">#</span>
+            <span className="flex-1">Gioco</span>
+            <span className="w-12 text-right flex-shrink-0">voti</span>
+            <span className="w-14 text-right flex-shrink-0">★ tot</span>
+          </div>
+          {ranked.map((opt, i) => {
+            const winner = winCut != null && i < winCut && opt.votes > 0;
+            return (
+              <div key={opt.id} className="flex items-center gap-2 px-3 py-2"
+                style={{ borderBottom: "1px solid var(--border)",
+                  backgroundColor: winner ? "var(--bg-elevated)" : undefined }}>
+                <span className="w-5 flex-shrink-0 tabular-nums text-sm" style={{ color: "var(--text-muted)" }}>
+                  {winner ? <Trophy size={13} style={{ color: "#f5b301" }} /> : i + 1}
+                </span>
+                <span className="flex-1 min-w-0 truncate text-sm" style={{ color: "var(--text-primary)" }}>{opt.gameName}</span>
+                <span className="w-12 text-right flex-shrink-0 tabular-nums text-sm" style={{ color: "var(--text-secondary)" }}>{opt.votes}</span>
+                <span className="w-14 text-right flex-shrink-0 tabular-nums text-sm" style={{ color: "var(--text-secondary)" }}>
+                  {opt.ratingSum > 0
+                    ? <><Star size={11} className="inline" style={{ color: "#f5b301" }} fill="#f5b301" /> {opt.ratingSum}</>
+                    : <span style={{ color: "var(--text-muted)" }}>—</span>}
+                </span>
+              </div>
+            );
+          })}
+          {/* vincitori, solo a chiusura e se impostati */}
+          {!open && winners.length > 0 && (
+            <div className="px-3 py-2 text-xs" style={{ color: "var(--text-secondary)" }}>
+              <Trophy size={11} className="inline" style={{ color: "#f5b301" }} />{" "}
+              <strong style={{ color: "var(--text-primary)" }}>Vincitori:</strong> {winners.map(w => w.gameName).join(", ")}
+            </div>
+          )}
         </div>
-      )}
+        );
+      })()}
 
       {/* Divisione in tavoli: si fa alla chiusura del sondaggio */}
       {results.some(r => r.votes > 0) && (
