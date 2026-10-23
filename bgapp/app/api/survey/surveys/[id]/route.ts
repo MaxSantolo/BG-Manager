@@ -25,7 +25,8 @@ export async function GET(
     prisma.surveyOption.findMany({
       where: { surveyId },
       select: {
-        id: true, gameId: true, gameName: true, gameThumbnail: true,
+        id: true, bggId: true, gameName: true, gameThumbnail: true,
+        minPlayers: true, maxPlayers: true,
         proposedById: true, proposedByName: true,
       },
       orderBy: { createdAt: "asc" },
@@ -65,4 +66,23 @@ export async function PATCH(
 
   await prisma.survey.update({ where: { id: surveyId }, data: { status } });
   return NextResponse.json({ ok: true, status });
+}
+
+/** Elimina un sondaggio. Solo chi l'ha creato. Opzioni e voti vanno in cascata. */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const surveyId = parseInt(id);
+  const actorId = Number(req.nextUrl.searchParams.get("actorId"));
+
+  const survey = await prisma.survey.findUnique({ where: { id: surveyId }, select: { createdById: true } });
+  if (!survey) return NextResponse.json({ error: "Sondaggio non trovato" }, { status: 404 });
+  if (survey.createdById !== actorId) {
+    return NextResponse.json({ error: "Solo chi ha creato il sondaggio può eliminarlo." }, { status: 403 });
+  }
+
+  await prisma.survey.delete({ where: { id: surveyId } });
+  return NextResponse.json({ ok: true });
 }

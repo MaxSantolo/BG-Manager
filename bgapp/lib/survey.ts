@@ -13,9 +13,11 @@ export interface SurveyRules {
 
 export interface OptionResult {
   id: number;
-  gameId: number;
+  bggId: number;
   gameName: string;
   gameThumbnail: string | null;
+  minPlayers: number | null;
+  maxPlayers: number | null;
   proposedById: number;
   proposedByName: string;
   votes: number;
@@ -24,7 +26,8 @@ export interface OptionResult {
 
 interface VoteRow { optionId: number; voterId: number; voterName: string }
 interface OptionRow {
-  id: number; gameId: number; gameName: string; gameThumbnail: string | null;
+  id: number; bggId: number; gameName: string; gameThumbnail: string | null;
+  minPlayers: number | null; maxPlayers: number | null;
   proposedById: number; proposedByName: string;
 }
 
@@ -91,4 +94,86 @@ export function describeRules(rules: SurveyRules): string {
   }
   parts.push(rules.proposersCanVoteOwn ? "puoi votare i tuoi giochi" : "non voti i tuoi giochi");
   return parts.join(" · ");
+}
+
+// ─── Proposta di divisione in tavoli ───────────────────────────────────────
+
+export interface GameTable {
+  bggId: number;
+  gameName: string;
+  gameThumbnail: string | null;
+  players: string[];
+}
+export interface TablePlan {
+  tables: GameTable[];
+  unseated: string[];   // ha votato ma non è entrato in nessun tavolo
+}
+
+/**
+ * Proposta — non verità — di come dividere i presenti in tavoli, partendo da
+ * chi ha votato cosa. È un'euristica, pensata per essere corretta a mano.
+ *
+ * Obiettivo: far sedere più persone possibile a un gioco che hanno votato,
+ * formando tavoli validi (numero giocatori entro il min/max di BGG, quando
+ * noto). Una persona siede a un solo tavolo.
+ *
+ * Greedy, ripetuto: si prende ogni volta il gioco con più votanti ancora
+ * liberi e lo si "apre" se raggiunge il minimo; si siedono prima i votanti meno
+ * flessibili (chi ha votato meno giochi), così chi ha alternative resta per
+ * riempire gli altri tavoli. Un gioco molto gettonato può aprire più tavoli.
+ */
+export function proposeTables(results: OptionResult[]): TablePlan {
+  // Voti ancora "liberi": nome votante → insieme di opzioni votate.
+  const pool = new Set<string>();
+  const votedOptions = new Map<string, Set<number>>(); // nome → id opzioni
+  for (const o of results) {
+    for (const name of o.voterNames) {
+      pool.add(name);
+      if (!votedOptions.has(name)) votedOptions.set(name, new Set());
+      votedOptions.get(name)!.add(o.id);
+    }
+  }
+
+  const byId = new Map(results.map((o) => [o.id, o]));
+  const tables: GameTable[] = [];
+
+  // Un tavolo di una persona non è un tavolo: in assenza di min noto, soglia 2.
+  const effMin = (o: OptionResult) => Math.max(o.minPlayers ?? 2, 1);
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    // Per ogni opzione, i suoi votanti ancora liberi.
+    let best: { opt: OptionResult; avail: string[] } | null = null;
+    for (const o of results) {
+      const avail = o.voterNames.filter((n) => pool.has(n));
+      if (avail.length < effMin(o)) continue;
+      if (!best
+        || avail.length > best.avail.length
+        || (avail.length === best.avail.length && o.votes > best.opt.votes)) {
+        best = { opt: o, avail };
+      }
+    }
+    if (!best) break;
+
+    // Siedono prima i meno flessibili (meno opzioni ancora aperte votate).
+    const stillOpen = (name: string) =>
+      [...(votedOptions.get(name) ?? [])].filter((id) => {
+        const o = byId.get(id)!;
+        return o.voterNames.filter((n) => pool.has(n)).length >= effMin(o);
+      }).length;
+    const ordered = [...best.avail].sort((a, b) => stillOpen(a) - stillOpen(b) || a.localeCompare(b));
+
+    const cap = best.opt.maxPlayers ?? ordered.length;
+    const seated = ordered.slice(0, cap);
+    for (const n of seated) pool.delete(n);
+
+    tables.push({
+      bggId: best.opt.bggId,
+      gameName: best.opt.gameName,
+      gameThumbnail: best.opt.gameThumbnail,
+      players: seated,
+    });
+  }
+
+  return { tables, unseated: [...pool].sort((a, b) => a.localeCompare(b)) };
 }

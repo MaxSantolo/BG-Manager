@@ -35,7 +35,8 @@ export async function POST(
   const options = await prisma.surveyOption.findMany({
     where: { surveyId },
     select: {
-      id: true, gameId: true, gameName: true, gameThumbnail: true,
+      id: true, bggId: true, gameName: true, gameThumbnail: true,
+      minPlayers: true, maxPlayers: true,
       proposedById: true, proposedByName: true,
     },
     orderBy: { createdAt: "asc" },

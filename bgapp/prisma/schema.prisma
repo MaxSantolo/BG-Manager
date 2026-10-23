@@ -233,18 +233,23 @@ model SurveyOption {
   id        Int      @id @default(autoincrement())
   surveyId  Int
   survey    Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
-  /// Gioco proposto (dalla collezione). gameId serve a impedire doppioni; nome e
-  /// copertina sono snapshot così il voto e i risultati non rileggono mai la
-  /// tabella Game — confine netto verso i dati privati della collezione.
-  gameId        Int
+  /// Gioco proposto, identificato dal suo id BoardGameGeek (non per forza in
+  /// collezione). bggId impedisce i doppioni; nome e copertina sono snapshot
+  /// presi da BGG alla proposta, così l'area sondaggi non tocca MAI la tabella
+  /// Game — confine totale verso i dati privati della collezione.
+  bggId         Int
   gameName      String
   gameThumbnail String?
+  /// Snapshot BGG del numero giocatori: serve a proporre la divisione in tavoli
+  /// senza rileggere nulla. Null quando BGG non li dà.
+  minPlayers    Int?
+  maxPlayers    Int?
   proposedById   Int
   proposedByName String
   createdAt DateTime @default(now())
   votes     Vote[]
 
-  @@unique([surveyId, gameId])
+  @@unique([surveyId, bggId])
   @@index([surveyId])
 }
 

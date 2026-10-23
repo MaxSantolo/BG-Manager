@@ -324,3 +324,12 @@ body {
   }
   .data-table tr:last-child td { border-bottom: none; }
 }
+
+/* Tema dell'area sondaggi: stessa struttura dell'app ma sull'azzurro/blu invece
+   del rosso. Ridefinendo i soli token accent, bottoni, badge, anelli di focus e
+   icone cambiano colore da soli — le primitive leggono questi token. */
+.survey-theme {
+  --accent-red: #2f7fe0;
+  --accent-red-hover: #2668c0;
+  --accent-red-light: #7fbaf6;
+}

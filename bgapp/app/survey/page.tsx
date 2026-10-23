@@ -61,7 +61,7 @@ export default function SurveyListPage() {
   }
 
   return (
-    <div className="space-y-4 max-w-2xl mx-auto">
+    <div className="survey-theme space-y-4 max-w-2xl mx-auto">
       <div className="flex items-center gap-2">
         <Dices size={22} style={{ color: "var(--accent-red-light)" }} />
         <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Cosa giochiamo?</h1>
