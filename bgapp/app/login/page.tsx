@@ -70,6 +70,13 @@ export default function LoginPage() {
             {loading ? <Loader2 size={15} className="animate-spin" /> : "Accedi"}
           </button>
         </form>
+
+        {/* Gli ospiti dei sondaggi arrivano spesso qui per sbaglio: la loro
+            password non vale su questo login, sta dietro un'altra porta. */}
+        <p className="text-xs text-center" style={{ color: "var(--text-muted)" }}>
+          Sei qui per i sondaggi?{" "}
+          <a href="/survey" style={{ color: "var(--accent-blue-light)" }}>Vai ai sondaggi →</a>
+        </p>
       </div>
     </div>
   );
