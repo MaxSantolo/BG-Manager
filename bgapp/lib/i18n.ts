@@ -5,6 +5,7 @@
  * default viene dall'Accept-Language del browser (vedi lib/i18nServer).
  *
  * Aggiungere una stringa = una voce qui + `t("chiave")` al posto del testo.
+ * Ambito: solo l'area sondaggi (vedi DICT).
  */
 export type Lang = "it" | "en";
 export const LANGS: Lang[] = ["it", "en"];
@@ -12,31 +13,13 @@ export const LANG_COOKIE = "bgm_lang";
 
 type Entry = { it: string; en: string };
 
-// Dizionario. Cresce man mano che si traduce l'app, area per area.
+// Dizionario. L'inglese copre SOLO l'area sondaggi (/survey), che è dove
+// entrano gli ospiti come Mike; l'app admin resta volutamente in italiano.
 export const DICT: Record<string, Entry> = {
-  // ── Navigazione ──
-  "nav.collection":  { it: "Collezione", en: "Collection" },
-  "nav.decide":      { it: "Cosa giochiamo", en: "What to play" },
-  "nav.wishlist":    { it: "Desiderata", en: "Wishlist" },
-  "nav.plays":       { it: "Partite", en: "Plays" },
-  "nav.neverPlayed": { it: "Mai giocati", en: "Never played" },
-  "nav.loans":       { it: "Prestiti", en: "Loans" },
-  "nav.sleeves":     { it: "Bustine", en: "Sleeves" },
-  "nav.stats":       { it: "Statistiche", en: "Statistics" },
-  "nav.registry":    { it: "Rubrica", en: "Registry" },
-  "nav.settings":    { it: "Impostazioni", en: "Settings" },
-  "nav.logout":      { it: "Esci", en: "Log out" },
-  "nav.menu":        { it: "Menu", en: "Menu" },
-  "nav.openMenu":    { it: "Apri menu", en: "Open menu" },
-  "nav.closeMenu":   { it: "Chiudi menu", en: "Close menu" },
-
   // ── Comuni ──
   "common.cancel":   { it: "Annulla", en: "Cancel" },
   "common.create":   { it: "Crea", en: "Create" },
   "common.close":    { it: "Chiudi", en: "Close" },
-  "common.loading":  { it: "Caricamento…", en: "Loading…" },
-  "common.save":     { it: "Salva", en: "Save" },
-  "common.search":   { it: "Cerca", en: "Search" },
   "common.who":      { it: "Dì prima chi sei.", en: "Say who you are first." },
 
   // ── Area sondaggi ──
@@ -95,7 +78,6 @@ export const DICT: Record<string, Entry> = {
   "s.finalResult":   { it: "Risultato finale", en: "Final result" },
   "s.pollClosed":    { it: "sondaggio chiuso", en: "poll closed" },
   "s.game":          { it: "Gioco", en: "Game" },
-  "s.starTot":       { it: "★ tot", en: "★ tot" },
   "s.winnersLabel":  { it: "Vincitori:", en: "Winners:" },
   "s.copyWa":        { it: "Copia per WhatsApp", en: "Copy for WhatsApp" },
   "s.copied":        { it: "Copiato! Incolla su WhatsApp", en: "Copied! Paste into WhatsApp" },
