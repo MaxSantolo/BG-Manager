@@ -70,6 +70,12 @@ export default function SurveyDetailPage() {
   const ranked = [...results].sort((a, b) =>
     b.votes - a.votes || b.ratingSum - a.ratingSum || a.gameName.localeCompare(b.gameName));
   const winCut = survey?.winnersCount && survey.winnersCount > 0 ? survey.winnersCount : null;
+  // Voti per opzione, con il gradimento di ciascun votante accanto al nome.
+  const votesByOption = new Map<number, VoteRow[]>();
+  for (const v of allVotes) {
+    if (!votesByOption.has(v.optionId)) votesByOption.set(v.optionId, []);
+    votesByOption.get(v.optionId)!.push(v);
+  }
 
   function togglePick(opt: OptionResult) {
     if (!open) return;
@@ -251,9 +257,11 @@ export default function SurveyDetailPage() {
                       propone {opt.proposedByName}{blocked ? " · è tuo" : ""}
                       {opt.avgRating != null && <> · <Star size={10} className="inline" style={{ color: "#f5b301" }} /> {opt.avgRating} ({opt.ratingCount})</>}
                     </p>
-                    {opt.voterNames.length > 0 && (
+                    {(votesByOption.get(opt.id)?.length ?? 0) > 0 && (
                       <p className="text-xs mt-0.5 truncate" style={{ color: "var(--accent-blue-light)" }}>
-                        voti: {opt.voterNames.join(", ")}
+                        voti: {votesByOption.get(opt.id)!
+                          .map(v => v.rating != null ? `${v.voterName} (${v.rating}★)` : v.voterName)
+                          .join(", ")}
                       </p>
                     )}
                   </div>
