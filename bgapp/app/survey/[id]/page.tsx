@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Plus, Loader2, Search, Check, Lock, Unlock, Trash2, Users, LayoutGrid, Star,
-  CalendarDays, Trophy, ExternalLink,
+  CalendarDays, Trophy, ExternalLink, Share2,
 } from "lucide-react";
 import { apiFetch } from "@/lib/fetchClient";
 import { useToast } from "@/components/Toast";
@@ -13,7 +13,7 @@ import { useIdentity } from "@/components/survey/useIdentity";
 import IdentityBar from "@/components/survey/IdentityBar";
 import SurveyLogo from "@/components/survey/SurveyLogo";
 import { formatDay } from "@/lib/dates";
-import { proposeTables, type OptionResult, type TablePlan } from "@/lib/survey";
+import { proposeTables, rankCompare, type OptionResult, type TablePlan } from "@/lib/survey";
 
 interface SurveyDetail {
   id: number; title: string; status: string; createdById: number; createdByName: string;
@@ -66,9 +66,13 @@ export default function SurveyDetailPage() {
   const open = survey?.status === "open";
   const totalVoters = new Set(results.flatMap(r => r.voterNames)).size;
   const maxVotes = Math.max(1, ...results.map(r => r.votes));
-  // Classifica: voti, poi totale stelle. I primi N (se impostati) sono vincitori.
+  // Classifica: voti, poi spareggio sulle stelle alte. Pari merito veri -> stessa
+  // posizione (1,1,3). I primi N (se impostati) sono vincitori.
   const ranked = [...results].sort((a, b) =>
-    b.votes - a.votes || b.ratingSum - a.ratingSum || a.gameName.localeCompare(b.gameName));
+    rankCompare(a, b) || a.gameName.localeCompare(b.gameName, "it"));
+  const positions = ranked.map((o, i) =>
+    i > 0 && rankCompare(ranked[i - 1], o) === 0 ? -1 : i + 1);
+  for (let i = 0; i < positions.length; i++) if (positions[i] === -1) positions[i] = positions[i - 1];
   const winCut = survey?.winnersCount && survey.winnersCount > 0 ? survey.winnersCount : null;
   // Voti per opzione, con il gradimento di ciascun votante accanto al nome.
   const votesByOption = new Map<number, VoteRow[]>();
@@ -134,6 +138,27 @@ export default function SurveyDetailPage() {
     });
     if (res.ok) { show(next === "closed" ? "Sondaggio chiuso" : "Sondaggio riaperto"); load(); }
     else show(res.data?.error ?? "Non riuscito", "error");
+  }
+
+  // Testo pronto da incollare nel gruppo (idea dalla versione di Simone).
+  function buildMessage(): string {
+    if (!survey) return "";
+    const L: string[] = [`🎲 ${survey.title}${survey.playDate ? " — " + formatDay(survey.playDate) : ""}`, "", "Classifica:"];
+    ranked.forEach((o, i) => {
+      const winner = winCut != null && i < winCut && o.votes > 0;
+      const star = o.ratingSum > 0 ? ` ★${o.ratingSum}` : "";
+      L.push(`${winner ? "🏆" : positions[i] + "."} ${o.gameName} — ${o.votes} voti${star}`);
+    });
+    if (plan) {
+      L.push("", "Tavoli:");
+      for (const t of plan.tables) L.push(`• ${t.gameName}: ${t.players.join(", ")}`);
+      if (plan.unseated.length > 0) L.push(`Senza tavolo: ${plan.unseated.join(", ")}`);
+    }
+    return L.join("\n");
+  }
+  async function copyMessage() {
+    try { await navigator.clipboard.writeText(buildMessage()); show("Copiato! Incolla su WhatsApp"); }
+    catch { show("Copia non riuscita", "error"); }
   }
 
   async function removeOption(opt: OptionResult) {
@@ -346,7 +371,7 @@ export default function SurveyDetailPage() {
                 style={{ borderBottom: "1px solid var(--border)",
                   backgroundColor: winner ? "var(--bg-elevated)" : undefined }}>
                 <span className="w-5 flex-shrink-0 tabular-nums text-sm" style={{ color: "var(--text-muted)" }}>
-                  {winner ? <Trophy size={13} style={{ color: "#f5b301" }} /> : i + 1}
+                  {winner ? <Trophy size={13} style={{ color: "#f5b301" }} /> : positions[i]}
                 </span>
                 <span className="flex-1 min-w-0 truncate text-sm" style={{ color: "var(--text-primary)" }}>{opt.gameName}</span>
                 <span className="w-12 text-right flex-shrink-0 tabular-nums text-sm" style={{ color: "var(--text-secondary)" }}>{opt.votes}</span>
@@ -368,6 +393,13 @@ export default function SurveyDetailPage() {
         </div>
         );
       })()}
+
+      {/* Messaggio pronto per il gruppo */}
+      {results.some(r => r.votes > 0) && (
+        <button type="button" onClick={copyMessage} className="btn-secondary w-full justify-center">
+          <Share2 size={15} /> Copia per WhatsApp
+        </button>
+      )}
 
       {/* Divisione in tavoli: si fa alla chiusura del sondaggio */}
       {results.some(r => r.votes > 0) && (

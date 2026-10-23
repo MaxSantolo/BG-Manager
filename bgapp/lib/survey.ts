@@ -25,6 +25,7 @@ export interface OptionResult {
   avgRating: number | null;   // media dei gradimenti dati a questo gioco
   ratingCount: number;        // quanti hanno dato un gradimento
   ratingSum: number;          // totale stelle, per la classifica
+  ratingDist: number[];       // conteggio per stella: indici 1..5 usati (0 ignorato)
 }
 
 interface VoteRow { optionId: number; voterId: number; voterName: string; rating?: number | null }
@@ -34,15 +35,19 @@ interface OptionRow {
   proposedById: number; proposedByName: string;
 }
 
-/** Conteggio voti per opzione + chi ha votato cosa, ordinato per voti. */
+/** Conteggio voti per opzione + chi ha votato cosa, in ordine di classifica. */
 export function buildResults(options: OptionRow[], votes: VoteRow[]): OptionResult[] {
-  const byOption = new Map<number, { n: number; names: string[]; rSum: number; rN: number }>();
-  for (const o of options) byOption.set(o.id, { n: 0, names: [], rSum: 0, rN: 0 });
+  const byOption = new Map<number, { n: number; names: string[]; rSum: number; rN: number; dist: number[] }>();
+  for (const o of options) byOption.set(o.id, { n: 0, names: [], rSum: 0, rN: 0, dist: [0, 0, 0, 0, 0, 0] });
   for (const v of votes) {
     const slot = byOption.get(v.optionId);
     if (!slot) continue;
     slot.n++; slot.names.push(v.voterName);
-    if (v.rating != null) { slot.rSum += v.rating; slot.rN++; }
+    if (v.rating != null) {
+      slot.rSum += v.rating; slot.rN++;
+      const k = Math.min(5, Math.max(1, Math.round(v.rating)));
+      slot.dist[k]++;
+    }
   }
   return options
     .map((o) => {
@@ -54,9 +59,24 @@ export function buildResults(options: OptionRow[], votes: VoteRow[]): OptionResu
         avgRating: s.rN > 0 ? Math.round((s.rSum / s.rN) * 10) / 10 : null,
         ratingCount: s.rN,
         ratingSum: s.rSum,
+        ratingDist: s.dist,
       };
     })
-    .sort((a, b) => b.votes - a.votes || a.gameName.localeCompare(b.gameName));
+    .sort((a, b) => rankCompare(a, b) || a.gameName.localeCompare(b.gameName, "it"));
+}
+
+/**
+ * Ordine di classifica fra due giochi: prima per numero di voti; a pari voti
+ * vince chi ha più stelle alte (5★, poi 4★…). Ritorna 0 per un pari merito
+ * vero. Idea presa dalla versione di Simone (Limone).
+ */
+export function rankCompare(a: OptionResult, b: OptionResult): number {
+  if (b.votes !== a.votes) return b.votes - a.votes;
+  for (let k = 5; k >= 1; k--) {
+    const d = (b.ratingDist[k] ?? 0) - (a.ratingDist[k] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
 }
 
 /**
@@ -144,9 +164,9 @@ export function proposeTables(
   votes: VoteDetail[],
   winnersCount: number | null,
 ): TablePlan {
-  // 1. Classifica: voti, poi totale stelle, poi nome.
+  // 1. Classifica: voti, poi spareggio sulle stelle alte (vedi rankCompare).
   const ranked = [...results].sort((a, b) =>
-    b.votes - a.votes || b.ratingSum - a.ratingSum || a.gameName.localeCompare(b.gameName));
+    rankCompare(a, b) || a.gameName.localeCompare(b.gameName, "it"));
   const cut = winnersCount && winnersCount > 0 ? winnersCount : ranked.length;
   const ranking: RankedGame[] = ranked.map((o, i) => ({
     ...o, rank: i + 1, winner: i < cut && o.votes > 0,
