@@ -10,6 +10,7 @@ export async function GET() {
     select: {
       id: true, title: true, status: true, createdByName: true, createdAt: true,
       playDate: true, multiVote: true, maxPicks: true, proposersCanVoteOwn: true, winnersCount: true,
+      secret: true, closeAfterVoters: true, closeAt: true,
       _count: { select: { options: true, votes: true } },
     },
   });
@@ -39,13 +40,22 @@ export async function POST(req: NextRequest) {
   const rawWinners = Number(body?.winnersCount);
   const winnersCount = Number.isFinite(rawWinners) && rawWinners >= 1 ? Math.floor(rawWinners) : null;
 
+  const secret = !!body?.secret;
+  const rawVoters = Number(body?.closeAfterVoters);
+  const closeAfterVoters = Number.isFinite(rawVoters) && rawVoters >= 1 ? Math.floor(rawVoters) : null;
+  // closeAt arriva già come ISO (il browser converte il datetime-local nel suo
+  // fuso): lo accettiamo solo se è una data valida e futura.
+  const closeAtRaw = typeof body?.closeAt === "string" ? new Date(body.closeAt) : null;
+  const closeAt = closeAtRaw && !isNaN(closeAtRaw.getTime()) ? closeAtRaw : null;
+
   // La data è un giorno di calendario (vedi lib/dates): la fissiamo a mezzogiorno
   // UTC così non slitta di un giorno quando viene riletta in fusi diversi.
   const playDateStr = typeof body?.playDate === "string" ? body.playDate.trim() : "";
   const playDate = /^\d{4}-\d{2}-\d{2}$/.test(playDateStr) ? new Date(`${playDateStr}T12:00:00.000Z`) : null;
 
   const survey = await prisma.survey.create({
-    data: { title, createdById, createdByName, multiVote, maxPicks, proposersCanVoteOwn, winnersCount, playDate },
+    data: { title, createdById, createdByName, multiVote, maxPicks, proposersCanVoteOwn, winnersCount, playDate,
+      secret, closeAfterVoters, closeAt },
     select: { id: true },
   });
   return NextResponse.json({ id: survey.id });

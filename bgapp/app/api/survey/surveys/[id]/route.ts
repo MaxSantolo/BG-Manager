@@ -1,22 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { buildResults } from "@/lib/survey";
+import { buildResults, shouldAutoClose } from "@/lib/survey";
 
 export const dynamic = "force-dynamic";
 
 /** Dettaglio: sondaggio + regole + opzioni con conteggio voti + chi ha votato cosa. */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
   const surveyId = parseInt(id);
+  const askerId = Number(req.nextUrl.searchParams.get("voterId")) || null;
 
   const survey = await prisma.survey.findUnique({
     where: { id: surveyId },
     select: {
       id: true, title: true, status: true, createdById: true, createdByName: true, createdAt: true,
       playDate: true, multiVote: true, maxPicks: true, proposersCanVoteOwn: true, winnersCount: true,
+      secret: true, closeAfterVoters: true, closeAt: true,
     },
   });
   if (!survey) return NextResponse.json({ error: "Sondaggio non trovato" }, { status: 404 });
@@ -37,12 +39,29 @@ export async function GET(
     }),
   ]);
 
+  // Chiusura automatica "pigra": se l'ora è passata o hanno votato abbastanza,
+  // qui si chiude davvero (una volta sola) prima di decidere cosa mostrare.
+  const distinctVoters = new Set(votes.map((v) => v.voterId)).size;
+  if (shouldAutoClose(survey, distinctVoters)) {
+    await prisma.survey.update({ where: { id: surveyId }, data: { status: "closed" } });
+    survey.status = "closed";
+  }
+
+  const results = buildResults(options, votes);
+  const hidden = survey.secret && survey.status === "open"; // segreto + ancora aperto
+
   return NextResponse.json({
     survey,
-    results: buildResults(options, votes),
-    // Coppie opzione↔votante: i risultati sono pubblici e live, quindi il client
-    // può pre-selezionare le scelte correnti di chi sta guardando.
-    votes: votes.map((v) => ({ optionId: v.optionId, voterId: v.voterId, voterName: v.voterName, rating: v.rating })),
+    // Voto segreto: finché è aperto i risultati sono nascosti A TUTTI, lato
+    // server (non solo in UI). Si vedono solo le opzioni, non i conteggi.
+    results: hidden
+      ? results.map((r) => ({ ...r, votes: 0, voterNames: [], avgRating: null, ratingCount: 0, ratingSum: 0, ratingDist: [0, 0, 0, 0, 0, 0] }))
+      : results,
+    // In segreto il richiedente riceve solo i PROPRI voti (per rivedere/correggere
+    // la sua scelta); altrimenti tutti, come prima.
+    votes: (hidden ? votes.filter((v) => v.voterId === askerId) : votes)
+      .map((v) => ({ optionId: v.optionId, voterId: v.voterId, voterName: v.voterName, rating: v.rating })),
+    hidden,
   });
 }
 

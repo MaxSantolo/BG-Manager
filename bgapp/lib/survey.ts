@@ -66,6 +66,22 @@ export function buildResults(options: OptionRow[], votes: VoteRow[]): OptionResu
 }
 
 /**
+ * Un sondaggio aperto va chiuso automaticamente? Vero se è passata l'ora
+ * closeAt (chiusura "pigra", verificata alla lettura) o se hanno votato in
+ * closeAfterVoters. Idea delle chiusure automatiche dalla versione di Simone.
+ */
+export function shouldAutoClose(
+  survey: { status: string; closeAt: Date | string | null; closeAfterVoters: number | null },
+  distinctVoters: number,
+  now: Date = new Date(),
+): boolean {
+  if (survey.status !== "open") return false;
+  if (survey.closeAt != null && now.getTime() >= new Date(survey.closeAt).getTime()) return true;
+  if (survey.closeAfterVoters != null && distinctVoters >= survey.closeAfterVoters) return true;
+  return false;
+}
+
+/**
  * Ordine di classifica fra due giochi: prima per numero di voti; a pari voti
  * vince chi ha più stelle alte (5★, poi 4★…). Ritorna 0 per un pari merito
  * vero. Idea presa dalla versione di Simone (Limone).

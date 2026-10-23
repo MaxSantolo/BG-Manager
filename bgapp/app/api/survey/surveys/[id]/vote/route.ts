@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { prismaTx } from "@/lib/prismaTx";
-import { validateVote, buildResults, type SurveyRules } from "@/lib/survey";
+import { validateVote, buildResults, shouldAutoClose, type SurveyRules } from "@/lib/survey";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +45,8 @@ export async function POST(
 
   const survey = await prisma.survey.findUnique({
     where: { id: surveyId },
-    select: { status: true, multiVote: true, maxPicks: true, proposersCanVoteOwn: true },
+    select: { status: true, multiVote: true, maxPicks: true, proposersCanVoteOwn: true,
+      secret: true, closeAfterVoters: true, closeAt: true },
   });
   if (!survey) return NextResponse.json({ error: "Sondaggio non trovato" }, { status: 404 });
   if (survey.status !== "open") return NextResponse.json({ error: "Il sondaggio è chiuso." }, { status: 409 });
@@ -85,8 +86,24 @@ export async function POST(
     where: { surveyId },
     select: { optionId: true, voterId: true, voterName: true, rating: true },
   });
+
+  // Chiusura automatica per numero di votanti: scatta qui, all'istante.
+  let status = survey.status;
+  const distinctVoters = new Set(votes.map((v) => v.voterId)).size;
+  if (shouldAutoClose({ status, closeAt: survey.closeAt, closeAfterVoters: survey.closeAfterVoters }, distinctVoters)) {
+    await prisma.survey.update({ where: { id: surveyId }, data: { status: "closed" } });
+    status = "closed";
+  }
+
+  const results = buildResults(options, votes);
+  const hidden = survey.secret && status === "open";
   return NextResponse.json({
-    results: buildResults(options, votes),
-    votes: votes.map((v) => ({ optionId: v.optionId, voterId: v.voterId, rating: v.rating })),
+    results: hidden
+      ? results.map((r) => ({ ...r, votes: 0, voterNames: [], avgRating: null, ratingCount: 0, ratingSum: 0, ratingDist: [0, 0, 0, 0, 0, 0] }))
+      : results,
+    votes: (hidden ? votes.filter((v) => v.voterId === voterId) : votes)
+      .map((v) => ({ optionId: v.optionId, voterId: v.voterId, rating: v.rating })),
+    closed: status === "closed",
+    hidden,
   });
 }

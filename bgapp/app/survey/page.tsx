@@ -31,6 +31,9 @@ export default function SurveyListPage() {
   const [maxPicks, setMaxPicks] = useState("");
   const [winnersCount, setWinnersCount] = useState("");
   const [proposersCanVoteOwn, setProposersCanVoteOwn] = useState(false);
+  const [secret, setSecret] = useState(false);
+  const [closeAfterVoters, setCloseAfterVoters] = useState("");
+  const [closeAt, setCloseAt] = useState("");
   const [saving, setSaving] = useState(false);
 
   async function load() {
@@ -50,11 +53,15 @@ export default function SurveyListPage() {
         body: JSON.stringify({
           title, createdById: identity.id, createdByName: identity.name, playDate,
           multiVote, maxPicks: multiVote ? maxPicks : "", winnersCount, proposersCanVoteOwn,
+          secret, closeAfterVoters,
+          // il browser (fuso dell'utente) converte il datetime-local in istante UTC
+          closeAt: closeAt ? new Date(closeAt).toISOString() : "",
         }),
       });
       if (res.ok && res.data?.id) {
         setTitle(""); setPlayDate(""); setMultiVote(false); setMaxPicks("");
         setWinnersCount(""); setProposersCanVoteOwn(false);
+        setSecret(false); setCloseAfterVoters(""); setCloseAt("");
         setShowForm(false);
         await load();
         show("Sondaggio creato");
@@ -110,6 +117,23 @@ export default function SurveyListPage() {
             <input type="checkbox" checked={proposersCanVoteOwn} onChange={e => setProposersCanVoteOwn(e.target.checked)} />
             Chi propone può votare il proprio gioco
           </label>
+          <label className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+            <input type="checkbox" checked={secret} onChange={e => setSecret(e.target.checked)} />
+            Voto segreto <span style={{ color: "var(--text-muted)" }}>(risultati solo alla chiusura)</span>
+          </label>
+
+          <div className="pt-1 space-y-2" style={{ borderTop: "1px solid var(--border)" }}>
+            <p className="text-xs font-semibold mt-1" style={{ color: "var(--text-muted)" }}>Chiusura automatica (opzionale)</p>
+            <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+              quando votano in
+              <input type="number" min="1" value={closeAfterVoters} onChange={e => setCloseAfterVoters(e.target.value)}
+                placeholder="—" className="w-20 text-sm" />
+            </div>
+            <div className="flex items-center gap-2 text-sm flex-wrap" style={{ color: "var(--text-secondary)" }}>
+              oppure il
+              <input type="datetime-local" value={closeAt} onChange={e => setCloseAt(e.target.value)} className="text-sm" />
+            </div>
+          </div>
 
           <div className="flex gap-2">
             <button type="button" onClick={create} disabled={saving || !title.trim()}

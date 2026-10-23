@@ -222,6 +222,12 @@ model Survey {
   multiVote           Boolean @default(false)  // più di una scelta?
   maxPicks            Int?                      // tetto scelte se multiVote; null = illimitato
   proposersCanVoteOwn Boolean @default(false)  // "chi propone non può votarli"
+  /// Voto segreto: risultati nascosti fino alla chiusura.
+  secret              Boolean @default(false)
+  /// Chiusura automatica: appena votano in N, oppure all'ora closeAt (chiusura
+  /// "pigra", verificata alla lettura). Null = nessuna chiusura automatica.
+  closeAfterVoters    Int?
+  closeAt             DateTime?
   /// Quanti giochi "vincono" alla chiusura: i top-N più votati diventano i
   /// tavoli su cui si distribuiscono i presenti. Null = tutti i giochi votati.
   winnersCount        Int?

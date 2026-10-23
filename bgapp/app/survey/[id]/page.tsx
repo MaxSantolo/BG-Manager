@@ -19,6 +19,7 @@ interface SurveyDetail {
   id: number; title: string; status: string; createdById: number; createdByName: string;
   playDate: string | null; multiVote: boolean; maxPicks: number | null;
   proposersCanVoteOwn: boolean; winnersCount: number | null;
+  secret: boolean; closeAfterVoters: number | null; closeAt: string | null;
 }
 interface VoteRow { optionId: number; voterId: number; voterName: string; rating: number | null }
 interface BggHit { bggId: number; name: string; year: number | null }
@@ -35,18 +36,20 @@ export default function SurveyDetailPage() {
   const [myPicks, setMyPicks] = useState<Set<number>>(new Set());
   const [myRatings, setMyRatings] = useState<Map<number, number>>(new Map()); // optionId → stelle
   const [allVotes, setAllVotes] = useState<VoteRow[]>([]);
+  const [hidden, setHidden] = useState(false); // voto segreto, risultati nascosti
   const [loading, setLoading] = useState(true);
   const [voting, setVoting] = useState(false);
   const [plan, setPlan] = useState<TablePlan | null>(null);
   const initedFor = useRef<number | null>(null);
 
   const load = useCallback(async () => {
-    const res = await apiFetch<{ survey: SurveyDetail; results: OptionResult[]; votes: VoteRow[] }>(
-      `/api/survey/surveys/${surveyId}`);
+    const res = await apiFetch<{ survey: SurveyDetail; results: OptionResult[]; votes: VoteRow[]; hidden?: boolean }>(
+      `/api/survey/surveys/${surveyId}${identity ? `?voterId=${identity.id}` : ""}`);
     if (res.data?.survey) {
       setSurvey(res.data.survey);
       setResults(res.data.results);
       setAllVotes(res.data.votes);
+      setHidden(!!res.data.hidden);
       if (identity && initedFor.current !== identity.id) {
         const mine = res.data.votes.filter(v => v.voterId === identity.id);
         setMyPicks(new Set(mine.map(v => v.optionId)));
@@ -122,7 +125,11 @@ export default function SurveyDetailPage() {
             picks: [...myPicks].map(id => ({ optionId: id, rating: myRatings.get(id) ?? null })),
           }),
         });
-      if (res.ok && res.data?.results) { setResults(res.data.results); show(myPicks.size === 0 ? "Voto annullato" : "Voto registrato"); }
+      if (res.ok && res.data?.results) {
+        setResults(res.data.results);
+        show(myPicks.size === 0 ? "Voto annullato" : "Voto registrato");
+        load(); // riallinea stato/segreto/eventuale auto-chiusura
+      }
       else show(res.data?.error ?? "Voto non riuscito", "error");
     } finally {
       setVoting(false);
@@ -234,10 +241,30 @@ export default function SurveyDetailPage() {
               <Trophy size={11} /> {survey.winnersCount} vincitori
             </span>
           )}
-          <span className="badge inline-flex items-center gap-1"
-            style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
-            <Users size={11} /> {totalVoters}
-          </span>
+          {survey.secret && (
+            <span className="badge inline-flex items-center gap-1"
+              style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
+              <Lock size={11} /> voto segreto
+            </span>
+          )}
+          {survey.closeAfterVoters != null && (
+            <span className="badge inline-flex items-center gap-1"
+              style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
+              chiude a {survey.closeAfterVoters} votanti
+            </span>
+          )}
+          {survey.closeAt && (
+            <span className="badge inline-flex items-center gap-1"
+              style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
+              <CalendarDays size={11} /> chiude {new Date(survey.closeAt).toLocaleString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
+          {!survey.secret && (
+            <span className="badge inline-flex items-center gap-1"
+              style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
+              <Users size={11} /> {totalVoters}
+            </span>
+          )}
         </div>
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>di {survey.createdByName}</p>
       </div>
@@ -291,7 +318,7 @@ export default function SurveyDetailPage() {
                       propone {opt.proposedByName}{blocked ? " · è tuo" : ""}
                       {opt.avgRating != null && <> · <Star size={10} className="inline" style={{ color: "#f5b301" }} /> {opt.avgRating} ({opt.ratingCount})</>}
                     </p>
-                    {(votesByOption.get(opt.id)?.length ?? 0) > 0 && (
+                    {!hidden && (votesByOption.get(opt.id)?.length ?? 0) > 0 && (
                       <p className="text-xs mt-0.5" style={{ color: "var(--accent-blue-light)", overflowWrap: "anywhere" }}>
                         voti: {votesByOption.get(opt.id)!
                           .map(v => v.rating != null ? `${v.voterName} (${v.rating}★)` : v.voterName)
@@ -300,7 +327,7 @@ export default function SurveyDetailPage() {
                     )}
                   </div>
                   <span className="text-lg font-bold flex-shrink-0 tabular-nums" style={{ color: "var(--text-primary)" }}>
-                    {opt.votes}
+                    {hidden ? <Lock size={15} style={{ color: "var(--text-muted)" }} /> : opt.votes}
                   </span>
                   {open && identity != null && (opt.proposedById === identity.id || survey.createdById === identity.id) && (
                     <button type="button" onClick={e => { e.stopPropagation(); removeOption(opt); }}
@@ -340,8 +367,16 @@ export default function SurveyDetailPage() {
         </button>
       )}
 
+      {/* Voto segreto: risultati nascosti finché aperto */}
+      {results.length > 0 && hidden && (
+        <div className="card text-sm text-center" style={{ color: "var(--text-secondary)" }}>
+          <Lock size={14} className="inline" style={{ color: "var(--text-muted)" }} />{" "}
+          Voto segreto: i risultati appaiono alla chiusura.
+        </div>
+      )}
+
       {/* Classifica (durante) / Risultato finale (a sondaggio chiuso) */}
-      {results.length > 0 && (() => {
+      {results.length > 0 && !hidden && (() => {
         const winners = winCut != null ? ranked.filter((o, i) => i < winCut && o.votes > 0) : [];
         return (
         <div className="card" style={{ padding: 0, overflow: "hidden",
