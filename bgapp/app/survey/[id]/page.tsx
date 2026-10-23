@@ -13,6 +13,8 @@ import { useIdentity } from "@/components/survey/useIdentity";
 import IdentityBar from "@/components/survey/IdentityBar";
 import SurveyLogo from "@/components/survey/SurveyLogo";
 import { formatDay } from "@/lib/dates";
+import { useT } from "@/components/i18n/LanguageProvider";
+import LanguageToggle from "@/components/i18n/LanguageToggle";
 import { proposeTables, rankCompare, type OptionResult, type TablePlan } from "@/lib/survey";
 
 interface SurveyDetail {
@@ -29,6 +31,7 @@ export default function SurveyDetailPage() {
   const router = useRouter();
   const surveyId = Number(params.id);
   const { show } = useToast();
+  const { t, lang } = useT();
   const [identity, setIdentity] = useIdentity();
 
   const [survey, setSurvey] = useState<SurveyDetail | null>(null);
@@ -96,7 +99,7 @@ export default function SurveyDetailPage() {
       }
       if (!survey?.multiVote) { next.clear(); setMyRatings(new Map()); }
       if (survey?.multiVote && survey.maxPicks != null && next.size >= survey.maxPicks) {
-        show(`Massimo ${survey.maxPicks} scelte.`, "error");
+        show(t("s.maxChoices", { n: survey.maxPicks }), "error");
         return prev;
       }
       next.add(opt.id);
@@ -114,7 +117,7 @@ export default function SurveyDetailPage() {
   }
 
   async function submitVote() {
-    if (!identity) { show("Dì prima chi sei.", "error"); return; }
+    if (!identity) { show(t("common.who"), "error"); return; }
     setVoting(true);
     try {
       const res = await apiFetch<{ results: OptionResult[]; error?: string }>(
@@ -127,10 +130,10 @@ export default function SurveyDetailPage() {
         });
       if (res.ok && res.data?.results) {
         setResults(res.data.results);
-        show(myPicks.size === 0 ? "Voto annullato" : "Voto registrato");
+        show(myPicks.size === 0 ? t("s.voteCancelled") : t("s.voteDone"));
         load(); // riallinea stato/segreto/eventuale auto-chiusura
       }
-      else show(res.data?.error ?? "Voto non riuscito", "error");
+      else show(res.data?.error ?? t("s.voteFail"), "error");
     } finally {
       setVoting(false);
     }
@@ -143,47 +146,47 @@ export default function SurveyDetailPage() {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ actorId: identity.id, status: next }),
     });
-    if (res.ok) { show(next === "closed" ? "Sondaggio chiuso" : "Sondaggio riaperto"); load(); }
-    else show(res.data?.error ?? "Non riuscito", "error");
+    if (res.ok) { show(next === "closed" ? t("s.closedToast") : t("s.reopenedToast")); load(); }
+    else show(res.data?.error ?? t("s.notDone"), "error");
   }
 
   // Testo pronto da incollare nel gruppo (idea dalla versione di Simone).
   function buildMessage(): string {
     if (!survey) return "";
-    const L: string[] = [`🎲 ${survey.title}${survey.playDate ? " — " + formatDay(survey.playDate) : ""}`, "", "Classifica:"];
+    const L: string[] = [`🎲 ${survey.title}${survey.playDate ? " — " + formatDay(survey.playDate) : ""}`, "", t("s.msgRanking")];
     ranked.forEach((o, i) => {
       const winner = winCut != null && i < winCut && o.votes > 0;
       const star = o.ratingSum > 0 ? ` ★${o.ratingSum}` : "";
       L.push(`${winner ? "🏆" : positions[i] + "."} ${o.gameName} — ${o.votes} voti${star}`);
     });
     if (plan) {
-      L.push("", "Tavoli:");
+      L.push("", t("s.msgTables"));
       for (const t of plan.tables) L.push(`• ${t.gameName}: ${t.players.join(", ")}`);
-      if (plan.unseated.length > 0) L.push(`Senza tavolo: ${plan.unseated.join(", ")}`);
+      if (plan.unseated.length > 0) L.push(`${t("s.msgNoTable")} ${plan.unseated.join(", ")}`);
     }
     return L.join("\n");
   }
   async function copyMessage() {
-    try { await navigator.clipboard.writeText(buildMessage()); show("Copiato! Incolla su WhatsApp"); }
-    catch { show("Copia non riuscita", "error"); }
+    try { await navigator.clipboard.writeText(buildMessage()); show(t("s.copied")); }
+    catch { show(t("s.copyFail"), "error"); }
   }
 
   async function removeOption(opt: OptionResult) {
-    if (!identity) { show("Dì prima chi sei.", "error"); return; }
-    if (!confirm(`Togliere "${opt.gameName}" dalle proposte? Spariscono anche i suoi voti.`)) return;
+    if (!identity) { show(t("common.who"), "error"); return; }
+    if (!confirm(t("s.confirmRemoveGame", { g: opt.gameName }))) return;
     const res = await apiFetch<{ error?: string }>(
       `/api/survey/surveys/${surveyId}/options/${opt.id}?actorId=${identity.id}`, { method: "DELETE" });
-    if (res.ok) { show("Gioco tolto"); load(); }
-    else show(res.data?.error ?? "Non riuscito", "error");
+    if (res.ok) { show(t("s.gameRemoved")); load(); }
+    else show(res.data?.error ?? t("s.notDone"), "error");
   }
 
   async function removeSurvey() {
     if (!survey || !identity) return;
-    if (!confirm("Eliminare il sondaggio? Spariscono proposte e voti.")) return;
+    if (!confirm(t("s.confirmDeletePoll"))) return;
     const res = await apiFetch<{ error?: string }>(
       `/api/survey/surveys/${surveyId}?actorId=${identity.id}`, { method: "DELETE" });
-    if (res.ok) { show("Sondaggio eliminato"); router.push("/survey"); }
-    else show(res.data?.error ?? "Non riuscito", "error");
+    if (res.ok) { show(t("s.deletedToast")); router.push("/survey"); }
+    else show(res.data?.error ?? t("s.notDone"), "error");
   }
 
   if (loading) {
@@ -192,8 +195,8 @@ export default function SurveyDetailPage() {
   }
   if (!survey) {
     return <div className="max-w-2xl mx-auto space-y-3">
-      <Link href="/survey" className="btn-ghost text-sm"><ArrowLeft size={14} /> Sondaggi</Link>
-      <div className="card text-center" style={{ color: "var(--text-secondary)" }}>Sondaggio non trovato.</div>
+      <Link href="/survey" className="btn-ghost text-sm"><ArrowLeft size={14} /> {t("s.back")}</Link>
+      <div className="card text-center" style={{ color: "var(--text-secondary)" }}>{t("s.notFound")}</div>
     </div>;
   }
 
@@ -202,7 +205,7 @@ export default function SurveyDetailPage() {
   return (
     <div className="survey-theme space-y-4 max-w-2xl mx-auto">
       <Link href="/survey" className="btn-ghost text-sm" style={{ color: "var(--accent-blue-light)" }}>
-        <ArrowLeft size={14} /> Sondaggi
+        <ArrowLeft size={14} /> {t("s.back")}
       </Link>
 
       {/* Testata con logo, data e riassunto regole in evidenza */}
@@ -215,7 +218,7 @@ export default function SurveyDetailPage() {
           </div>
           {iAmCreator && (
             <button type="button" onClick={removeSurvey} className="btn-ghost p-1.5 flex-shrink-0"
-              aria-label="Elimina" title="Elimina sondaggio" style={{ color: "var(--accent-red-light)" }}>
+              aria-label={t("s.deletePoll")} title={t("s.deletePoll")} style={{ color: "var(--accent-red-light)" }}>
               <Trash2 size={15} />
             </button>
           )}
@@ -229,34 +232,34 @@ export default function SurveyDetailPage() {
           )}
           <span className="badge" style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
             {survey.multiVote
-              ? `Scelte multiple${survey.maxPicks != null ? ` · max ${survey.maxPicks}` : ""}`
-              : "Una sola scelta"}
+              ? `${t("s.multiChoice")}${survey.maxPicks != null ? ` · ${t("s.max").toLowerCase()} ${survey.maxPicks}` : ""}`
+              : t("s.oneChoice")}
           </span>
           <span className="badge" style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
-            {survey.proposersCanVoteOwn ? "puoi votare i tuoi giochi" : "non voti i tuoi giochi"}
+            {survey.proposersCanVoteOwn ? t("s.canVoteOwn") : t("s.cantVoteOwn")}
           </span>
           {survey.winnersCount != null && (
             <span className="badge inline-flex items-center gap-1"
               style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
-              <Trophy size={11} /> {survey.winnersCount} vincitori
+              <Trophy size={11} /> {survey.winnersCount} {t("s.winnersBadge")}
             </span>
           )}
           {survey.secret && (
             <span className="badge inline-flex items-center gap-1"
               style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
-              <Lock size={11} /> voto segreto
+              <Lock size={11} /> {t("s.secretBadge")}
             </span>
           )}
           {survey.closeAfterVoters != null && (
             <span className="badge inline-flex items-center gap-1"
               style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
-              chiude a {survey.closeAfterVoters} votanti
+              {t("s.closesAtN", { n: survey.closeAfterVoters })}
             </span>
           )}
           {survey.closeAt && (
             <span className="badge inline-flex items-center gap-1"
               style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
-              <CalendarDays size={11} /> chiude {new Date(survey.closeAt).toLocaleString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+              <CalendarDays size={11} /> {t("s.closesOn", { d: new Date(survey.closeAt).toLocaleString(lang === "en" ? "en-GB" : "it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) })}
             </span>
           )}
           {!survey.secret && (
@@ -266,7 +269,7 @@ export default function SurveyDetailPage() {
             </span>
           )}
         </div>
-        <p className="text-xs" style={{ color: "var(--text-muted)" }}>di {survey.createdByName}</p>
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>{t("s.of")} {survey.createdByName}</p>
       </div>
 
       <IdentityBar identity={identity} onChange={setIdentity} />
@@ -275,7 +278,7 @@ export default function SurveyDetailPage() {
 
       {results.length === 0 ? (
         <div className="card text-center" style={{ color: "var(--text-secondary)" }}>
-          Nessun gioco proposto. {open ? "Aggiungine uno." : ""}
+          {t("s.noProposed")} {open ? t("s.addOne") : ""}
         </div>
       ) : (
         <div className="space-y-2">
@@ -304,7 +307,7 @@ export default function SurveyDetailPage() {
                       <a href={`https://boardgamegeek.com/boardgame/${opt.bggId}`}
                         target="_blank" rel="noopener noreferrer"
                         onClick={e => e.stopPropagation()}
-                        className="flex-shrink-0" title="Apri su BoardGameGeek"
+                        className="flex-shrink-0" title={t("s.openBgg")}
                         style={{ color: "var(--accent-blue-light)" }}>
                         <ExternalLink size={13} />
                       </a>
@@ -315,12 +318,12 @@ export default function SurveyDetailPage() {
                       )}
                     </div>
                     <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                      propone {opt.proposedByName}{blocked ? " · è tuo" : ""}
+                      {t("s.proposes")} {opt.proposedByName}{blocked ? ` · ${t("s.itsYours")}` : ""}
                       {opt.avgRating != null && <> · <Star size={10} className="inline" style={{ color: "#f5b301" }} /> {opt.avgRating} ({opt.ratingCount})</>}
                     </p>
                     {!hidden && (votesByOption.get(opt.id)?.length ?? 0) > 0 && (
                       <p className="text-xs mt-0.5" style={{ color: "var(--accent-blue-light)", overflowWrap: "anywhere" }}>
-                        voti: {votesByOption.get(opt.id)!
+                        {t("s.votes")}: {votesByOption.get(opt.id)!
                           .map(v => v.rating != null ? `${v.voterName} (${v.rating}★)` : v.voterName)
                           .join(", ")}
                       </p>
@@ -331,8 +334,8 @@ export default function SurveyDetailPage() {
                   </span>
                   {open && identity != null && (opt.proposedById === identity.id || survey.createdById === identity.id) && (
                     <button type="button" onClick={e => { e.stopPropagation(); removeOption(opt); }}
-                      className="btn-ghost p-1 flex-shrink-0" aria-label="Togli gioco"
-                      title="Togli questo gioco dalle proposte" style={{ color: "var(--text-muted)" }}>
+                      className="btn-ghost p-1 flex-shrink-0" aria-label={t("s.removeGame")}
+                      title={t("s.removeGame")} style={{ color: "var(--text-muted)" }}>
                       <Trash2 size={14} />
                     </button>
                   )}
@@ -340,7 +343,7 @@ export default function SurveyDetailPage() {
                 {/* selettore stelle: appare quando il gioco è tra le mie scelte */}
                 {picked && open && (
                   <div className="relative flex items-center gap-1 px-3.5 pb-3 pt-0" style={{ zIndex: 1 }}>
-                    <span className="text-xs mr-1" style={{ color: "var(--text-muted)" }}>gradimento:</span>
+                    <span className="text-xs mr-1" style={{ color: "var(--text-muted)" }}>{t("s.rating")}</span>
                     {[1, 2, 3, 4, 5].map(n => {
                       const on = (myRatings.get(opt.id) ?? 0) >= n;
                       return (
@@ -363,7 +366,7 @@ export default function SurveyDetailPage() {
         <button type="button" onClick={submitVote} disabled={voting || !identity}
           className="btn-primary w-full justify-center sticky bottom-4">
           {voting ? <Loader2 size={15} className="animate-spin" />
-            : myPicks.size === 0 ? "Annulla il mio voto" : `Vota (${myPicks.size})`}
+            : myPicks.size === 0 ? t("s.cancelMyVote") : t("s.voteN", { n: myPicks.size })}
         </button>
       )}
 
@@ -371,7 +374,7 @@ export default function SurveyDetailPage() {
       {results.length > 0 && hidden && (
         <div className="card text-sm text-center" style={{ color: "var(--text-secondary)" }}>
           <Lock size={14} className="inline" style={{ color: "var(--text-muted)" }} />{" "}
-          Voto segreto: i risultati appaiono alla chiusura.
+          {t("s.secretHidden")}
         </div>
       )}
 
@@ -387,16 +390,16 @@ export default function SurveyDetailPage() {
               backgroundColor: open ? undefined : "var(--accent-blue)" }}>
             <Trophy size={15} style={{ color: open ? "var(--accent-red-light)" : "#fff" }} />
             <span className="font-semibold text-sm" style={{ color: open ? "var(--text-primary)" : "#fff" }}>
-              {open ? "Classifica" : "Risultato finale"}
+              {open ? t("s.ranking") : t("s.finalResult")}
             </span>
-            {!open && <span className="text-xs ml-auto" style={{ color: "rgba(255,255,255,0.8)" }}>sondaggio chiuso</span>}
+            {!open && <span className="text-xs ml-auto" style={{ color: "rgba(255,255,255,0.8)" }}>{t("s.pollClosed")}</span>}
           </div>
           {/* intestazione colonne */}
           <div className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold"
             style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--border)" }}>
             <span className="w-5 flex-shrink-0">#</span>
-            <span className="flex-1">Gioco</span>
-            <span className="w-12 text-right flex-shrink-0">voti</span>
+            <span className="flex-1">{t("s.game")}</span>
+            <span className="w-12 text-right flex-shrink-0">{t("s.votes")}</span>
             <span className="w-14 text-right flex-shrink-0">★ tot</span>
           </div>
           {ranked.map((opt, i) => {
@@ -422,7 +425,7 @@ export default function SurveyDetailPage() {
           {!open && winners.length > 0 && (
             <div className="px-3 py-2 text-xs" style={{ color: "var(--text-secondary)" }}>
               <Trophy size={11} className="inline" style={{ color: "#f5b301" }} />{" "}
-              <strong style={{ color: "var(--text-primary)" }}>Vincitori:</strong> {winners.map(w => w.gameName).join(", ")}
+              <strong style={{ color: "var(--text-primary)" }}>{t("s.winnersLabel")}</strong> {winners.map(w => w.gameName).join(", ")}
             </div>
           )}
         </div>
@@ -432,7 +435,7 @@ export default function SurveyDetailPage() {
       {/* Messaggio pronto per il gruppo */}
       {results.some(r => r.votes > 0) && (
         <button type="button" onClick={copyMessage} className="btn-secondary w-full justify-center">
-          <Share2 size={15} /> Copia per WhatsApp
+          <Share2 size={15} /> {t("s.copyWa")}
         </button>
       )}
 
@@ -440,13 +443,13 @@ export default function SurveyDetailPage() {
       {results.some(r => r.votes > 0) && (
         open ? (
           <p className="text-xs text-center" style={{ color: "var(--text-muted)" }}>
-            I tavoli si propongono alla chiusura del sondaggio.
+            {t("s.tablesAtClose")}
           </p>
         ) : (
           <div className="space-y-2">
             <button type="button" onClick={() => setPlan(proposeTables(results, allVotes, survey.winnersCount))}
               className="btn-primary w-full justify-center">
-              <LayoutGrid size={15} /> Proponi i tavoli
+              <LayoutGrid size={15} /> {t("s.proposeTables")}
             </button>
             {plan && <TablesView plan={plan} />}
           </div>
@@ -456,7 +459,7 @@ export default function SurveyDetailPage() {
       {iAmCreator && (
         <button type="button" onClick={toggleStatus} className="btn-ghost text-sm w-full justify-center"
           style={{ color: "var(--text-muted)" }}>
-          {survey.status === "open" ? <><Lock size={13} /> Chiudi sondaggio</> : <><Unlock size={13} /> Riapri</>}
+          {survey.status === "open" ? <><Lock size={13} /> {t("s.closePoll")}</> : <><Unlock size={13} /> {t("s.reopen")}</>}
         </button>
       )}
     </div>
@@ -465,35 +468,36 @@ export default function SurveyDetailPage() {
 
 /** Mostra la proposta di tavoli (vincitori) + chi resta fuori. */
 function TablesView({ plan }: { plan: TablePlan }) {
+  const { t } = useT();
   return (
     <div className="space-y-2">
       {plan.tables.length === 0 ? (
         <div className="card text-sm" style={{ color: "var(--text-secondary)" }}>
-          Nessun tavolo: nessun gioco vincitore ha preso voti.
+          {t("s.noValidTable")}
         </div>
-      ) : plan.tables.map((t, i) => (
+      ) : plan.tables.map((tbl, i) => (
         <div key={i} className="card">
           <div className="flex items-center gap-2">
-            {t.gameThumbnail
-              ? <img src={t.gameThumbnail} alt="" className="w-9 h-9 object-contain rounded flex-shrink-0" />
+            {tbl.gameThumbnail
+              ? <img src={tbl.gameThumbnail} alt="" className="w-9 h-9 object-contain rounded flex-shrink-0" />
               : <div className="w-9 h-9 rounded flex-shrink-0" style={{ backgroundColor: "var(--bg-elevated)" }} />}
-            <span className="font-semibold truncate" style={{ color: "var(--text-primary)" }}>{t.gameName}</span>
+            <span className="font-semibold truncate" style={{ color: "var(--text-primary)" }}>{tbl.gameName}</span>
             <span className="text-xs ml-auto flex-shrink-0 tabular-nums"
-              style={{ color: t.short ? "var(--accent-red-light)" : "var(--text-muted)" }}>
-              {t.players.length}{(t.minPlayers || t.maxPlayers) ? ` / ${t.minPlayers ?? "?"}–${t.maxPlayers ?? "?"}` : ""} giocatori
+              style={{ color: tbl.short ? "var(--accent-red-light)" : "var(--text-muted)" }}>
+              {tbl.players.length}{(tbl.minPlayers || tbl.maxPlayers) ? ` / ${tbl.minPlayers ?? "?"}–${tbl.maxPlayers ?? "?"}` : ""} {t("s.players")}
             </span>
           </div>
-          <p className="text-sm mt-1.5" style={{ color: "var(--text-secondary)" }}>{t.players.join(", ")}</p>
-          {t.short && <p className="text-xs mt-1" style={{ color: "var(--accent-red-light)" }}>sotto il minimo di giocatori</p>}
+          <p className="text-sm mt-1.5" style={{ color: "var(--text-secondary)" }}>{tbl.players.join(", ")}</p>
+          {tbl.short && <p className="text-xs mt-1" style={{ color: "var(--accent-red-light)" }}>{t("s.belowMin")}</p>}
         </div>
       ))}
       {plan.unseated.length > 0 && (
         <div className="card text-sm" style={{ color: "var(--text-muted)" }}>
-          Senza tavolo: {plan.unseated.join(", ")}
+          {t("s.noTable")} {plan.unseated.join(", ")}
         </div>
       )}
       <p className="text-xs text-center" style={{ color: "var(--text-muted)" }}>
-        Proposta automatica dai voti e dal gradimento — sistemala a mano come serve.
+        {t("s.tablesNote")}
       </p>
     </div>
   );
@@ -504,6 +508,7 @@ function ProposeGame({ surveyId, identity, onAdded }: {
   surveyId: number; identity: { id: number; name: string } | null; onAdded: () => void;
 }) {
   const { show } = useToast();
+  const { t } = useT();
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<BggHit[]>([]);
   const [openPanel, setOpenPanel] = useState(false);
@@ -523,7 +528,7 @@ function ProposeGame({ surveyId, identity, onAdded }: {
   }, [q, openPanel]);
 
   async function propose(g: BggHit) {
-    if (!identity) { show("Dì prima chi sei.", "error"); return; }
+    if (!identity) { show(t("common.who"), "error"); return; }
     setAdding(true);
     try {
       const res = await apiFetch<{ id?: number; error?: string }>(`/api/survey/surveys/${surveyId}/options`, {
@@ -533,8 +538,8 @@ function ProposeGame({ surveyId, identity, onAdded }: {
           bggId: g.bggId, gameName: g.name,
         }),
       });
-      if (res.ok) { setQ(""); setHits([]); setOpenPanel(false); onAdded(); show(`"${g.name}" proposto`); }
-      else show(res.data?.error ?? "Non riuscito", "error");
+      if (res.ok) { setQ(""); setHits([]); setOpenPanel(false); onAdded(); show(t("s.proposedToast", { g: g.name })); }
+      else show(res.data?.error ?? t("s.notDone"), "error");
     } finally {
       setAdding(false);
     }
@@ -543,7 +548,7 @@ function ProposeGame({ surveyId, identity, onAdded }: {
   if (!openPanel) {
     return (
       <button type="button" onClick={() => setOpenPanel(true)} className="btn-secondary w-full justify-center">
-        <Plus size={15} /> Proponi un gioco
+        <Plus size={15} /> {t("s.proposeGame")}
       </button>
     );
   }
@@ -553,18 +558,18 @@ function ProposeGame({ surveyId, identity, onAdded }: {
       <div className="flex items-center gap-2">
         <Search size={15} style={{ color: "var(--text-muted)" }} />
         <input type="text" value={q} onChange={e => setQ(e.target.value)} autoFocus
-          placeholder="Cerca su BoardGameGeek…" className="w-full text-sm" />
+          placeholder={t("s.searchBgg")} className="w-full text-sm" />
         <button type="button" onClick={() => { setOpenPanel(false); setQ(""); }}
-          className="btn-ghost text-xs" style={{ color: "var(--text-muted)" }}>Chiudi</button>
+          className="btn-ghost text-xs" style={{ color: "var(--text-muted)" }}>{t("common.close")}</button>
       </div>
       {adding ? (
-        <p className="text-xs" style={{ color: "var(--text-muted)" }}><Loader2 size={12} className="animate-spin inline" /> aggiungo…</p>
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}><Loader2 size={12} className="animate-spin inline" /> {t("s.adding")}</p>
       ) : searching ? (
-        <p className="text-xs" style={{ color: "var(--text-muted)" }}><Loader2 size={12} className="animate-spin inline" /> cerco su BGG…</p>
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}><Loader2 size={12} className="animate-spin inline" /> {t("s.searching")}</p>
       ) : q.trim().length < 2 ? (
-        <p className="text-xs" style={{ color: "var(--text-muted)" }}>Scrivi almeno due lettere.</p>
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>{t("s.minTwo")}</p>
       ) : hits.length === 0 ? (
-        <p className="text-xs" style={{ color: "var(--text-muted)" }}>Nessun gioco su BGG.</p>
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>{t("s.noGame")}</p>
       ) : (
         <div className="flex flex-col gap-1 max-h-72 overflow-y-auto">
           {hits.map(g => (

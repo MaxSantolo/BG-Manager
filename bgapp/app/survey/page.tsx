@@ -8,7 +8,8 @@ import { useToast } from "@/components/Toast";
 import { useIdentity } from "@/components/survey/useIdentity";
 import IdentityBar from "@/components/survey/IdentityBar";
 import SurveyLogo from "@/components/survey/SurveyLogo";
-import { describeRules } from "@/lib/survey";
+import { useT } from "@/components/i18n/LanguageProvider";
+import LanguageToggle from "@/components/i18n/LanguageToggle";
 import { formatDay, todayInput } from "@/lib/dates";
 
 interface SurveyRow {
@@ -20,6 +21,7 @@ interface SurveyRow {
 
 export default function SurveyListPage() {
   const { show } = useToast();
+  const { t } = useT();
   const [identity, setIdentity] = useIdentity();
   const [surveys, setSurveys] = useState<SurveyRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +38,9 @@ export default function SurveyListPage() {
   const [closeAt, setCloseAt] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const rulesText = (r: SurveyRow) =>
+    `${r.multiVote ? t("s.multiChoice") + (r.maxPicks != null ? ` (${t("s.max").toLowerCase()} ${r.maxPicks})` : "") : t("s.oneChoice")} · ${r.proposersCanVoteOwn ? t("s.canVoteOwn") : t("s.cantVoteOwn")}`;
+
   async function load() {
     const res = await apiFetch<{ surveys: SurveyRow[] }>("/api/survey/surveys");
     setSurveys(res.data?.surveys ?? []);
@@ -44,7 +49,7 @@ export default function SurveyListPage() {
   useEffect(() => { load(); }, []);
 
   async function create() {
-    if (!identity) { show("Dì prima chi sei.", "error"); return; }
+    if (!identity) { show(t("common.who"), "error"); return; }
     if (!title.trim()) return;
     setSaving(true);
     try {
@@ -64,9 +69,9 @@ export default function SurveyListPage() {
         setSecret(false); setCloseAfterVoters(""); setCloseAt("");
         setShowForm(false);
         await load();
-        show("Sondaggio creato");
+        show(t("s.created"));
       } else {
-        show(res.data?.error ?? "Non riuscito", "error");
+        show(res.data?.error ?? t("s.notDone"), "error");
       }
     } finally {
       setSaving(false);
@@ -77,60 +82,61 @@ export default function SurveyListPage() {
     <div className="survey-theme space-y-4 max-w-2xl mx-auto">
       <div className="flex items-center gap-2">
         <SurveyLogo size={30} />
-        <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Cosa giochiamo?</h1>
+        <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>{t("s.title")}</h1>
+        <div className="ml-auto"><LanguageToggle compact /></div>
       </div>
 
       <IdentityBar identity={identity} onChange={setIdentity} />
 
       {!showForm ? (
         <button type="button" onClick={() => setShowForm(true)} className="btn-primary w-full justify-center">
-          <Plus size={15} /> Nuovo sondaggio
+          <Plus size={15} /> {t("s.newPoll")}
         </button>
       ) : (
         <div className="card space-y-3">
           <div className="flex gap-2">
             <input type="text" value={title} onChange={e => setTitle(e.target.value)}
-              placeholder="Titolo (es. Giovedì sera)" className="flex-1 min-w-0" autoFocus />
+              placeholder={t("s.pollTitle")} className="flex-1 min-w-0" autoFocus />
             <input type="date" value={playDate} min={todayInput()} onChange={e => setPlayDate(e.target.value)}
-              className="text-sm flex-shrink-0" title="Quando si gioca" />
+              className="text-sm flex-shrink-0" title={t("s.whenPlay")} />
           </div>
 
           <label className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
             <input type="checkbox" checked={multiVote} onChange={e => setMultiVote(e.target.checked)} />
-            Scelte multiple
+            {t("s.multi")}
           </label>
           {multiVote && (
             <div className="flex items-center gap-2 text-sm pl-6" style={{ color: "var(--text-secondary)" }}>
-              Massimo
+              {t("s.max")}
               <input type="number" min="1" value={maxPicks} onChange={e => setMaxPicks(e.target.value)}
                 placeholder="∞" className="w-20 text-sm" />
-              giochi <span style={{ color: "var(--text-muted)" }}>(vuoto = senza limite)</span>
+              {t("s.games")} <span style={{ color: "var(--text-muted)" }}>{t("s.noLimit")}</span>
             </div>
           )}
           <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-            <Trophy size={14} style={{ color: "var(--accent-red-light)" }} /> Giochi vincitori
+            <Trophy size={14} style={{ color: "var(--accent-red-light)" }} /> {t("s.winners")}
             <input type="number" min="1" value={winnersCount} onChange={e => setWinnersCount(e.target.value)}
-              placeholder="tutti" className="w-20 text-sm" />
-            <span style={{ color: "var(--text-muted)" }}>(i tavoli a fine sondaggio)</span>
+              placeholder={t("s.winnersBadge")} className="w-20 text-sm" />
+            <span style={{ color: "var(--text-muted)" }}>{t("s.winnersHint")}</span>
           </div>
           <label className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
             <input type="checkbox" checked={proposersCanVoteOwn} onChange={e => setProposersCanVoteOwn(e.target.checked)} />
-            Chi propone può votare il proprio gioco
+            {t("s.proposersVote")}
           </label>
           <label className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
             <input type="checkbox" checked={secret} onChange={e => setSecret(e.target.checked)} />
-            Voto segreto <span style={{ color: "var(--text-muted)" }}>(risultati solo alla chiusura)</span>
+            {t("s.secret")} <span style={{ color: "var(--text-muted)" }}>{t("s.secretHint")}</span>
           </label>
 
           <div className="pt-1 space-y-2" style={{ borderTop: "1px solid var(--border)" }}>
-            <p className="text-xs font-semibold mt-1" style={{ color: "var(--text-muted)" }}>Chiusura automatica (opzionale)</p>
+            <p className="text-xs font-semibold mt-1" style={{ color: "var(--text-muted)" }}>{t("s.autoClose")}</p>
             <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-              quando votano in
+              {t("s.closeAtVoters")}
               <input type="number" min="1" value={closeAfterVoters} onChange={e => setCloseAfterVoters(e.target.value)}
                 placeholder="—" className="w-20 text-sm" />
             </div>
             <div className="flex items-center gap-2 text-sm flex-wrap" style={{ color: "var(--text-secondary)" }}>
-              oppure il
+              {t("s.closeAtDate")}
               <input type="datetime-local" value={closeAt} onChange={e => setCloseAt(e.target.value)} className="text-sm" />
             </div>
           </div>
@@ -138,9 +144,9 @@ export default function SurveyListPage() {
           <div className="flex gap-2">
             <button type="button" onClick={create} disabled={saving || !title.trim()}
               className="btn-primary flex-1 justify-center">
-              {saving ? <Loader2 size={15} className="animate-spin" /> : "Crea"}
+              {saving ? <Loader2 size={15} className="animate-spin" /> : t("common.create")}
             </button>
-            <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Annulla</button>
+            <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">{t("common.cancel")}</button>
           </div>
         </div>
       )}
@@ -151,7 +157,7 @@ export default function SurveyListPage() {
         </div>
       ) : surveys.length === 0 ? (
         <div className="card text-center" style={{ color: "var(--text-secondary)" }}>
-          Ancora nessun sondaggio. Creane uno.
+          {t("s.noPolls")}
         </div>
       ) : (
         <div className="space-y-2">
@@ -167,11 +173,11 @@ export default function SurveyListPage() {
                 <p className="text-xs mt-0.5 flex items-center gap-1 flex-wrap" style={{ color: "var(--text-muted)" }}>
                   {s.playDate && <span className="inline-flex items-center gap-1" style={{ color: "var(--accent-blue-light)" }}>
                     <CalendarDays size={11} /> {formatDay(s.playDate)}</span>}
-                  <span>di {s.createdByName} · {describeRules(s)}</span>
+                  <span>{t("s.of")} {s.createdByName} · {rulesText(s)}</span>
                 </p>
               </div>
               <div className="flex items-center gap-3 flex-shrink-0 text-xs" style={{ color: "var(--text-secondary)" }}>
-                <span>{s._count.options} giochi</span>
+                <span>{s._count.options} {t("s.gamesCount")}</span>
                 <span className="inline-flex items-center gap-1"><Vote size={13} /> {s._count.votes}</span>
               </div>
             </Link>

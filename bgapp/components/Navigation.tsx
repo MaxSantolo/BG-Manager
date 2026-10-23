@@ -4,22 +4,25 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Library, Heart, BarChart3, BookOpen, Package, LogOut, Menu, Dice5, Trophy, Settings, Users, Sparkles } from "lucide-react";
 import { useState } from "react";
+import { useT } from "@/components/i18n/LanguageProvider";
+import LanguageToggle from "@/components/i18n/LanguageToggle";
 
 const links = [
-  { href: "/collection", label: "Collezione", icon: Library },
-  { href: "/decide", label: "Cosa giochiamo", icon: Dice5 },
-  { href: "/wishlist", label: "Desiderata", icon: Heart },
-  { href: "/plays", label: "Partite", icon: Trophy },
-  { href: "/mai-giocati", label: "Mai giocati", icon: Sparkles },
-  { href: "/prestiti", label: "Prestiti", icon: BookOpen },
-  { href: "/sleeves", label: "Bustine", icon: Package },
-  { href: "/rubrica", label: "Rubrica", icon: Users },
-  { href: "/statistics", label: "Statistiche", icon: BarChart3 },
+  { href: "/collection", key: "nav.collection", icon: Library },
+  { href: "/decide", key: "nav.decide", icon: Dice5 },
+  { href: "/wishlist", key: "nav.wishlist", icon: Heart },
+  { href: "/plays", key: "nav.plays", icon: Trophy },
+  { href: "/mai-giocati", key: "nav.neverPlayed", icon: Sparkles },
+  { href: "/prestiti", key: "nav.loans", icon: BookOpen },
+  { href: "/sleeves", key: "nav.sleeves", icon: Package },
+  { href: "/rubrica", key: "nav.registry", icon: Users },
+  { href: "/statistics", key: "nav.stats", icon: BarChart3 },
 ];
 
 export default function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
+  const { t } = useT();
   const [open, setOpen] = useState(false);
 
   async function handleLogout() {
@@ -55,7 +58,7 @@ export default function Navigation() {
         {/* Scorrevole invece che tagliata: con nove voci la riga non entra sotto
             i ~1180px (iPad in orizzontale, laptop piccoli). */}
         <div className="hidden sm:flex items-center gap-1 flex-1 min-w-0 overflow-x-auto nav-scroll">
-          {links.map(({ href, label, icon: Icon }) => {
+          {links.map(({ href, key, icon: Icon }) => {
             const active = pathname.startsWith(href);
             return (
               <Link
@@ -69,7 +72,7 @@ export default function Navigation() {
                 }}
               >
                 <Icon size={15} />
-                {label}
+                {t(key)}
               </Link>
             );
           })}
@@ -78,20 +81,21 @@ export default function Navigation() {
         {/* Hamburger menu button (mobile only) */}
         <button
           className="sm:hidden btn-ghost p-2 ml-auto"
-          aria-label="Apri menu"
+          aria-label={t("nav.openMenu")}
           onClick={() => setOpen((v) => !v)}
           style={{ color: "var(--text-muted)" }}
         >
           <Menu size={22} />
         </button>
 
-        {/* Settings + Logout desktop */}
+        {/* Lingua + Settings + Logout desktop */}
         <div className="hidden sm:flex items-center gap-1 ml-2">
-          <Link href="/settings" className="btn-ghost p-1.5" title="Impostazioni"
+          <LanguageToggle compact />
+          <Link href="/settings" className="btn-ghost p-1.5" title={t("nav.settings")}
             style={{ color: "var(--text-muted)" }}>
             <Settings size={16} />
           </Link>
-          <button onClick={handleLogout} className="btn-ghost p-1.5" title="Esci"
+          <button onClick={handleLogout} className="btn-ghost p-1.5" title={t("nav.logout")}
             style={{ color: "var(--text-muted)" }}>
             <LogOut size={16} />
           </button>
@@ -107,12 +111,12 @@ export default function Navigation() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <span className="font-bold text-lg tracking-tight" style={{ color: "var(--text-primary)" }}>Menu</span>
-              <button className="btn-ghost p-1" onClick={() => setOpen(false)} aria-label="Chiudi menu">
+              <span className="font-bold text-lg tracking-tight" style={{ color: "var(--text-primary)" }}>{t("nav.menu")}</span>
+              <button className="btn-ghost p-1" onClick={() => setOpen(false)} aria-label={t("nav.closeMenu")}>
                 ✕
               </button>
             </div>
-            {links.map(({ href, label, icon: Icon }) => {
+            {links.map(({ href, key, icon: Icon }) => {
               const active = pathname.startsWith(href);
               return (
                 <Link
@@ -126,22 +130,23 @@ export default function Navigation() {
                   onClick={() => setOpen(false)}
                 >
                   <Icon size={18} />
-                  {label}
+                  {t(key)}
                 </Link>
               );
             })}
             <Link href="/settings" onClick={() => setOpen(false)}
               className="flex items-center gap-2 px-2 py-2 text-base font-medium"
               style={{ color: "var(--text-secondary)" }}>
-              <Settings size={18} /> Impostazioni
+              <Settings size={18} /> {t("nav.settings")}
             </Link>
             <button
               onClick={() => { setOpen(false); handleLogout(); }}
               className="btn-ghost flex items-center gap-2 px-2 py-2 mt-2 text-base font-medium"
               style={{ color: "var(--text-muted)" }}
             >
-              <LogOut size={18} /> Esci
+              <LogOut size={18} /> {t("nav.logout")}
             </button>
+            <div className="mt-2"><LanguageToggle /></div>
           </div>
         </div>
       )}

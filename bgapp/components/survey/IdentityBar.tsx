@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { UserRound, Check, Loader2, Plus, X } from "lucide-react";
 import { apiFetch } from "@/lib/fetchClient";
+import { useT } from "@/components/i18n/LanguageProvider";
 import type { Identity } from "./useIdentity";
 
 interface PlayerOpt { id: number; name: string; avatarUrl: string | null }
@@ -11,6 +12,7 @@ interface PlayerOpt { id: number; name: string; avatarUrl: string | null }
 export default function IdentityBar({
   identity, onChange,
 }: { identity: Identity | null; onChange: (id: Identity | null) => void }) {
+  const { t } = useT();
   const [players, setPlayers] = useState<PlayerOpt[]>([]);
   const [picking, setPicking] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -48,12 +50,12 @@ export default function IdentityBar({
         <div className="flex items-center gap-2 min-w-0">
           <UserRound size={16} style={{ color: "var(--accent-red-light)" }} />
           <span className="text-sm truncate" style={{ color: "var(--text-secondary)" }}>
-            Stai giocando come <strong style={{ color: "var(--text-primary)" }}>{identity.name}</strong>
+            {t("s.playingAs")} <strong style={{ color: "var(--text-primary)" }}>{identity.name}</strong>
           </span>
         </div>
         <button type="button" onClick={() => setPicking(true)}
           className="btn-ghost text-xs flex-shrink-0" style={{ color: "var(--accent-blue-light)" }}>
-          Cambia
+          {t("s.change")}
         </button>
       </div>
     );
@@ -61,7 +63,7 @@ export default function IdentityBar({
 
   return (
     <div className="card p-3 space-y-2">
-      <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Chi sei?</p>
+      <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{t("s.whoAreYou")}</p>
 
       {!creating ? (
         <>
@@ -80,7 +82,7 @@ export default function IdentityBar({
           </div>
           <button type="button" onClick={() => setCreating(true)}
             className="btn-ghost text-xs" style={{ color: "var(--accent-blue-light)" }}>
-            <Plus size={13} /> Nuovo nome
+            <Plus size={13} /> {t("s.newName")}
           </button>
         </>
       ) : (
@@ -88,10 +90,10 @@ export default function IdentityBar({
           <input type="text" value={newName} autoFocus
             onChange={e => setNewName(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); createPlayer(); } }}
-            placeholder="Il tuo nome" className="w-full text-sm" />
+            placeholder={t("s.yourName")} className="w-full text-sm" />
           <button type="button" onClick={createPlayer} disabled={busy || !newName.trim()}
             className="btn-primary text-sm px-3">
-            {busy ? <Loader2 size={14} className="animate-spin" /> : "Crea"}
+            {busy ? <Loader2 size={14} className="animate-spin" /> : t("common.create")}
           </button>
           <button type="button" onClick={() => { setCreating(false); setNewName(""); }}
             className="btn-ghost p-1.5" aria-label="Annulla"><X size={14} /></button>
