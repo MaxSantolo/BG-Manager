@@ -4,18 +4,23 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
-  ArrowLeft, Plus, Loader2, Search, Check, Lock, Unlock, Trash2, Users, LayoutGrid,
+  ArrowLeft, Plus, Loader2, Search, Check, Lock, Unlock, Trash2, Users, LayoutGrid, Star,
+  CalendarDays, Trophy,
 } from "lucide-react";
 import { apiFetch } from "@/lib/fetchClient";
 import { useToast } from "@/components/Toast";
 import { useIdentity } from "@/components/survey/useIdentity";
 import IdentityBar from "@/components/survey/IdentityBar";
-import { describeRules, proposeTables, type OptionResult, type TablePlan } from "@/lib/survey";
+import SurveyLogo from "@/components/survey/SurveyLogo";
+import { formatDay } from "@/lib/dates";
+import { proposeTables, type OptionResult, type TablePlan } from "@/lib/survey";
 
 interface SurveyDetail {
   id: number; title: string; status: string; createdById: number; createdByName: string;
-  multiVote: boolean; maxPicks: number | null; proposersCanVoteOwn: boolean;
+  playDate: string | null; multiVote: boolean; maxPicks: number | null;
+  proposersCanVoteOwn: boolean; winnersCount: number | null;
 }
+interface VoteRow { optionId: number; voterId: number; voterName: string; rating: number | null }
 interface BggHit { bggId: number; name: string; year: number | null }
 
 export default function SurveyDetailPage() {
@@ -28,20 +33,24 @@ export default function SurveyDetailPage() {
   const [survey, setSurvey] = useState<SurveyDetail | null>(null);
   const [results, setResults] = useState<OptionResult[]>([]);
   const [myPicks, setMyPicks] = useState<Set<number>>(new Set());
+  const [myRatings, setMyRatings] = useState<Map<number, number>>(new Map()); // optionId → stelle
+  const [allVotes, setAllVotes] = useState<VoteRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [voting, setVoting] = useState(false);
   const [plan, setPlan] = useState<TablePlan | null>(null);
   const initedFor = useRef<number | null>(null);
 
   const load = useCallback(async () => {
-    const res = await apiFetch<{ survey: SurveyDetail; results: OptionResult[]; votes: { optionId: number; voterId: number }[] }>(
+    const res = await apiFetch<{ survey: SurveyDetail; results: OptionResult[]; votes: VoteRow[] }>(
       `/api/survey/surveys/${surveyId}`);
     if (res.data?.survey) {
       setSurvey(res.data.survey);
       setResults(res.data.results);
+      setAllVotes(res.data.votes);
       if (identity && initedFor.current !== identity.id) {
-        const mine = res.data.votes.filter(v => v.voterId === identity.id).map(v => v.optionId);
-        setMyPicks(new Set(mine));
+        const mine = res.data.votes.filter(v => v.voterId === identity.id);
+        setMyPicks(new Set(mine.map(v => v.optionId)));
+        setMyRatings(new Map(mine.filter(v => v.rating != null).map(v => [v.optionId, v.rating!])));
         initedFor.current = identity.id;
       }
     }
@@ -57,20 +66,37 @@ export default function SurveyDetailPage() {
   const open = survey?.status === "open";
   const totalVoters = new Set(results.flatMap(r => r.voterNames)).size;
   const maxVotes = Math.max(1, ...results.map(r => r.votes));
+  // Classifica: voti, poi totale stelle. I primi N (se impostati) sono vincitori.
+  const ranked = [...results].sort((a, b) =>
+    b.votes - a.votes || b.ratingSum - a.ratingSum || a.gameName.localeCompare(b.gameName));
+  const winCut = survey?.winnersCount && survey.winnersCount > 0 ? survey.winnersCount : null;
 
   function togglePick(opt: OptionResult) {
     if (!open) return;
     if (identity && !survey?.proposersCanVoteOwn && opt.proposedById === identity.id) return;
     setMyPicks(prev => {
       const next = new Set(prev);
-      if (next.has(opt.id)) { next.delete(opt.id); return next; }
-      if (!survey?.multiVote) next.clear();
+      if (next.has(opt.id)) {
+        next.delete(opt.id);
+        setMyRatings(r => { const m = new Map(r); m.delete(opt.id); return m; }); // via la scelta, via la stella
+        return next;
+      }
+      if (!survey?.multiVote) { next.clear(); setMyRatings(new Map()); }
       if (survey?.multiVote && survey.maxPicks != null && next.size >= survey.maxPicks) {
         show(`Massimo ${survey.maxPicks} scelte.`, "error");
         return prev;
       }
       next.add(opt.id);
       return next;
+    });
+  }
+
+  function setRating(optionId: number, stars: number) {
+    setMyRatings(prev => {
+      const m = new Map(prev);
+      if (m.get(optionId) === stars) m.delete(optionId); // ritocco la stessa stella = tolgo il voto
+      else m.set(optionId, stars);
+      return m;
     });
   }
 
@@ -81,7 +107,10 @@ export default function SurveyDetailPage() {
       const res = await apiFetch<{ results: OptionResult[]; error?: string }>(
         `/api/survey/surveys/${surveyId}/vote`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ voterId: identity.id, voterName: identity.name, optionIds: [...myPicks] }),
+          body: JSON.stringify({
+            voterId: identity.id, voterName: identity.name,
+            picks: [...myPicks].map(id => ({ optionId: id, rating: myRatings.get(id) ?? null })),
+          }),
         });
       if (res.ok && res.data?.results) { setResults(res.data.results); show("Voto registrato"); }
       else show(res.data?.error ?? "Voto non riuscito", "error");
@@ -129,12 +158,13 @@ export default function SurveyDetailPage() {
         <ArrowLeft size={14} /> Sondaggi
       </Link>
 
-      {/* Testata con riassunto regole in evidenza */}
+      {/* Testata con logo, data e riassunto regole in evidenza */}
       <div className="card space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
+            <SurveyLogo size={26} />
             {!open && <Lock size={16} style={{ color: "var(--text-muted)" }} />}
-            <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>{survey.title}</h1>
+            <h1 className="text-xl font-bold truncate" style={{ color: "var(--text-primary)" }}>{survey.title}</h1>
           </div>
           {iAmCreator && (
             <button type="button" onClick={removeSurvey} className="btn-ghost p-1.5 flex-shrink-0"
@@ -144,6 +174,12 @@ export default function SurveyDetailPage() {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
+          {survey.playDate && (
+            <span className="badge inline-flex items-center gap-1"
+              style={{ backgroundColor: "var(--accent-blue)", color: "#fff" }}>
+              <CalendarDays size={11} /> {formatDay(survey.playDate)}
+            </span>
+          )}
           <span className="badge" style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
             {survey.multiVote
               ? `Scelte multiple${survey.maxPicks != null ? ` · max ${survey.maxPicks}` : ""}`
@@ -152,6 +188,12 @@ export default function SurveyDetailPage() {
           <span className="badge" style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
             {survey.proposersCanVoteOwn ? "puoi votare i tuoi giochi" : "non voti i tuoi giochi"}
           </span>
+          {survey.winnersCount != null && (
+            <span className="badge inline-flex items-center gap-1"
+              style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
+              <Trophy size={11} /> {survey.winnersCount} vincitori
+            </span>
+          )}
           <span className="badge inline-flex items-center gap-1"
             style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
             <Users size={11} /> {totalVoters}
@@ -175,16 +217,16 @@ export default function SurveyDetailPage() {
             const mine = identity != null && opt.proposedById === identity.id;
             const blocked = mine && !survey.proposersCanVoteOwn;
             return (
-              <button key={opt.id} type="button" onClick={() => togglePick(opt)}
-                disabled={!open || blocked}
-                className="card w-full text-left relative overflow-hidden"
-                style={{ cursor: open && !blocked ? "pointer" : "default",
-                  borderColor: picked ? "var(--accent-red)" : undefined,
-                  borderWidth: picked ? 2 : undefined }}>
+              <div key={opt.id} className="card relative overflow-hidden"
+                style={{ borderColor: picked ? "var(--accent-red)" : undefined,
+                  borderWidth: picked ? 2 : undefined, padding: 0 }}>
                 <div className="absolute inset-y-0 left-0" style={{
                   width: `${(opt.votes / maxVotes) * 100}%`,
                   backgroundColor: "var(--bg-elevated)", opacity: 0.5, zIndex: 0 }} />
-                <div className="relative flex items-center gap-3" style={{ zIndex: 1 }}>
+                {/* area di voto (toggle) */}
+                <div onClick={() => togglePick(opt)}
+                  className="relative flex items-center gap-3 p-3.5"
+                  style={{ zIndex: 1, cursor: open && !blocked ? "pointer" : "default" }}>
                   {opt.gameThumbnail
                     ? <img src={opt.gameThumbnail} alt="" className="w-11 h-11 object-contain rounded flex-shrink-0" />
                     : <div className="w-11 h-11 rounded flex-shrink-0" style={{ backgroundColor: "var(--bg-elevated)" }} />}
@@ -200,6 +242,7 @@ export default function SurveyDetailPage() {
                     </div>
                     <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                       propone {opt.proposedByName}{blocked ? " · è tuo" : ""}
+                      {opt.avgRating != null && <> · <Star size={10} className="inline" style={{ color: "#f5b301" }} /> {opt.avgRating} ({opt.ratingCount})</>}
                     </p>
                     {opt.voterNames.length > 0 && (
                       <p className="text-xs mt-0.5 truncate" style={{ color: "var(--accent-blue-light)" }}>
@@ -211,7 +254,23 @@ export default function SurveyDetailPage() {
                     {opt.votes}
                   </span>
                 </div>
-              </button>
+                {/* selettore stelle: appare quando il gioco è tra le mie scelte */}
+                {picked && open && (
+                  <div className="relative flex items-center gap-1 px-3.5 pb-3 pt-0" style={{ zIndex: 1 }}>
+                    <span className="text-xs mr-1" style={{ color: "var(--text-muted)" }}>gradimento:</span>
+                    {[1, 2, 3, 4, 5].map(n => {
+                      const on = (myRatings.get(opt.id) ?? 0) >= n;
+                      return (
+                        <button key={n} type="button" onClick={() => setRating(opt.id, n)}
+                          aria-label={`${n} stelle`} className="p-0.5">
+                          <Star size={18} style={{ color: on ? "#f5b301" : "var(--text-muted)" }}
+                            fill={on ? "#f5b301" : "none"} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
@@ -225,15 +284,56 @@ export default function SurveyDetailPage() {
         </button>
       )}
 
-      {/* Proposta di divisione in tavoli */}
-      {results.some(r => r.votes > 0) && (
-        <div className="space-y-2">
-          <button type="button" onClick={() => setPlan(proposeTables(results))}
-            className="btn-secondary w-full justify-center">
-            <LayoutGrid size={15} /> Proponi i tavoli
-          </button>
-          {plan && <TablesView plan={plan} />}
+      {/* Classifica: totale voti + totale stelle */}
+      {results.length > 0 && (
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <table className="data-table w-full text-sm">
+            <thead>
+              <tr>
+                <th style={{ textAlign: "left" }}>#</th>
+                <th style={{ textAlign: "left" }}>Gioco</th>
+                <th style={{ textAlign: "right" }}>Voti</th>
+                <th style={{ textAlign: "right" }}>★ tot</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ranked.map((opt, i) => {
+                const winner = winCut != null && i < winCut && opt.votes > 0;
+                return (
+                  <tr key={opt.id} style={winner ? { backgroundColor: "var(--bg-elevated)" } : undefined}>
+                    <td style={{ color: "var(--text-muted)" }} className="tabular-nums">
+                      {winner ? <Trophy size={12} className="inline" style={{ color: "#f5b301" }} /> : i + 1}
+                    </td>
+                    <td style={{ color: "var(--text-primary)" }} className="truncate">{opt.gameName}</td>
+                    <td style={{ textAlign: "right", color: "var(--text-secondary)" }} className="tabular-nums">{opt.votes}</td>
+                    <td style={{ textAlign: "right", color: "var(--text-secondary)" }} className="tabular-nums">
+                      {opt.ratingSum > 0
+                        ? <><Star size={11} className="inline" style={{ color: "#f5b301" }} fill="#f5b301" /> {opt.ratingSum}{opt.avgRating != null ? ` (${opt.avgRating})` : ""}</>
+                        : <span style={{ color: "var(--text-muted)" }}>—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
+      )}
+
+      {/* Divisione in tavoli: si fa alla chiusura del sondaggio */}
+      {results.some(r => r.votes > 0) && (
+        open ? (
+          <p className="text-xs text-center" style={{ color: "var(--text-muted)" }}>
+            I tavoli si propongono alla chiusura del sondaggio.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            <button type="button" onClick={() => setPlan(proposeTables(results, allVotes, survey.winnersCount))}
+              className="btn-primary w-full justify-center">
+              <LayoutGrid size={15} /> Proponi i tavoli
+            </button>
+            {plan && <TablesView plan={plan} />}
+          </div>
+        )
       )}
 
       {iAmCreator && (
@@ -246,13 +346,13 @@ export default function SurveyDetailPage() {
   );
 }
 
-/** Mostra la proposta di tavoli + chi resta fuori. */
+/** Mostra la proposta di tavoli (vincitori) + chi resta fuori. */
 function TablesView({ plan }: { plan: TablePlan }) {
   return (
     <div className="space-y-2">
       {plan.tables.length === 0 ? (
         <div className="card text-sm" style={{ color: "var(--text-secondary)" }}>
-          Non si forma nessun tavolo valido con i voti attuali.
+          Nessun tavolo: nessun gioco vincitore ha preso voti.
         </div>
       ) : plan.tables.map((t, i) => (
         <div key={i} className="card">
@@ -260,10 +360,14 @@ function TablesView({ plan }: { plan: TablePlan }) {
             {t.gameThumbnail
               ? <img src={t.gameThumbnail} alt="" className="w-9 h-9 object-contain rounded flex-shrink-0" />
               : <div className="w-9 h-9 rounded flex-shrink-0" style={{ backgroundColor: "var(--bg-elevated)" }} />}
-            <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{t.gameName}</span>
-            <span className="text-xs ml-auto" style={{ color: "var(--text-muted)" }}>{t.players.length} giocatori</span>
+            <span className="font-semibold truncate" style={{ color: "var(--text-primary)" }}>{t.gameName}</span>
+            <span className="text-xs ml-auto flex-shrink-0 tabular-nums"
+              style={{ color: t.short ? "var(--accent-red-light)" : "var(--text-muted)" }}>
+              {t.players.length}{(t.minPlayers || t.maxPlayers) ? ` / ${t.minPlayers ?? "?"}–${t.maxPlayers ?? "?"}` : ""} giocatori
+            </span>
           </div>
           <p className="text-sm mt-1.5" style={{ color: "var(--text-secondary)" }}>{t.players.join(", ")}</p>
+          {t.short && <p className="text-xs mt-1" style={{ color: "var(--accent-red-light)" }}>sotto il minimo di giocatori</p>}
         </div>
       ))}
       {plan.unseated.length > 0 && (
@@ -272,7 +376,7 @@ function TablesView({ plan }: { plan: TablePlan }) {
         </div>
       )}
       <p className="text-xs text-center" style={{ color: "var(--text-muted)" }}>
-        È una proposta automatica dai voti — sistemala a mano come serve.
+        Proposta automatica dai voti e dal gradimento — sistemala a mano come serve.
       </p>
     </div>
   );

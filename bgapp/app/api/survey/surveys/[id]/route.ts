@@ -16,7 +16,7 @@ export async function GET(
     where: { id: surveyId },
     select: {
       id: true, title: true, status: true, createdById: true, createdByName: true, createdAt: true,
-      multiVote: true, maxPicks: true, proposersCanVoteOwn: true,
+      playDate: true, multiVote: true, maxPicks: true, proposersCanVoteOwn: true, winnersCount: true,
     },
   });
   if (!survey) return NextResponse.json({ error: "Sondaggio non trovato" }, { status: 404 });
@@ -33,7 +33,7 @@ export async function GET(
     }),
     prisma.vote.findMany({
       where: { surveyId },
-      select: { optionId: true, voterId: true, voterName: true },
+      select: { optionId: true, voterId: true, voterName: true, rating: true },
     }),
   ]);
 
@@ -42,7 +42,7 @@ export async function GET(
     results: buildResults(options, votes),
     // Coppie opzione↔votante: i risultati sono pubblici e live, quindi il client
     // può pre-selezionare le scelte correnti di chi sta guardando.
-    votes: votes.map((v) => ({ optionId: v.optionId, voterId: v.voterId })),
+    votes: votes.map((v) => ({ optionId: v.optionId, voterId: v.voterId, voterName: v.voterName, rating: v.rating })),
   });
 }
 

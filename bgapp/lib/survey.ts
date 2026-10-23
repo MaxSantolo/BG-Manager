@@ -22,9 +22,12 @@ export interface OptionResult {
   proposedByName: string;
   votes: number;
   voterNames: string[];
+  avgRating: number | null;   // media dei gradimenti dati a questo gioco
+  ratingCount: number;        // quanti hanno dato un gradimento
+  ratingSum: number;          // totale stelle, per la classifica
 }
 
-interface VoteRow { optionId: number; voterId: number; voterName: string }
+interface VoteRow { optionId: number; voterId: number; voterName: string; rating?: number | null }
 interface OptionRow {
   id: number; bggId: number; gameName: string; gameThumbnail: string | null;
   minPlayers: number | null; maxPlayers: number | null;
@@ -33,18 +36,26 @@ interface OptionRow {
 
 /** Conteggio voti per opzione + chi ha votato cosa, ordinato per voti. */
 export function buildResults(options: OptionRow[], votes: VoteRow[]): OptionResult[] {
-  const byOption = new Map<number, { n: number; names: string[] }>();
-  for (const o of options) byOption.set(o.id, { n: 0, names: [] });
+  const byOption = new Map<number, { n: number; names: string[]; rSum: number; rN: number }>();
+  for (const o of options) byOption.set(o.id, { n: 0, names: [], rSum: 0, rN: 0 });
   for (const v of votes) {
     const slot = byOption.get(v.optionId);
-    if (slot) { slot.n++; slot.names.push(v.voterName); }
+    if (!slot) continue;
+    slot.n++; slot.names.push(v.voterName);
+    if (v.rating != null) { slot.rSum += v.rating; slot.rN++; }
   }
   return options
-    .map((o) => ({
-      ...o,
-      votes: byOption.get(o.id)!.n,
-      voterNames: byOption.get(o.id)!.names,
-    }))
+    .map((o) => {
+      const s = byOption.get(o.id)!;
+      return {
+        ...o,
+        votes: s.n,
+        voterNames: s.names,
+        avgRating: s.rN > 0 ? Math.round((s.rSum / s.rN) * 10) / 10 : null,
+        ratingCount: s.rN,
+        ratingSum: s.rSum,
+      };
+    })
     .sort((a, b) => b.votes - a.votes || a.gameName.localeCompare(b.gameName));
 }
 
@@ -98,82 +109,96 @@ export function describeRules(rules: SurveyRules): string {
 
 // ─── Proposta di divisione in tavoli ───────────────────────────────────────
 
+export interface VoteDetail { optionId: number; voterName: string; rating: number | null }
+
 export interface GameTable {
   bggId: number;
   gameName: string;
   gameThumbnail: string | null;
+  minPlayers: number | null;
+  maxPlayers: number | null;
   players: string[];
+  short: boolean;   // sotto il minimo di giocatori
 }
+export interface RankedGame extends OptionResult { rank: number; winner: boolean }
 export interface TablePlan {
+  ranking: RankedGame[];       // classifica completa, con i vincitori marcati
   tables: GameTable[];
-  unseated: string[];   // ha votato ma non è entrato in nessun tavolo
+  unseated: string[];          // presenti il cui gioco non ha fatto tavolo
 }
 
 /**
- * Proposta — non verità — di come dividere i presenti in tavoli, partendo da
- * chi ha votato cosa. È un'euristica, pensata per essere corretta a mano.
+ * Proposta — non verità — di come dividere i presenti in tavoli, da fare alla
+ * CHIUSURA del sondaggio. È un'euristica, pensata per essere corretta a mano.
  *
- * Obiettivo: far sedere più persone possibile a un gioco che hanno votato,
- * formando tavoli validi (numero giocatori entro il min/max di BGG, quando
- * noto). Una persona siede a un solo tavolo.
- *
- * Greedy, ripetuto: si prende ogni volta il gioco con più votanti ancora
- * liberi e lo si "apre" se raggiunge il minimo; si siedono prima i votanti meno
- * flessibili (chi ha votato meno giochi), così chi ha alternative resta per
- * riempire gli altri tavoli. Un gioco molto gettonato può aprire più tavoli.
+ * Passi (come stabilito):
+ *  1. classifica dei giochi per totale voti, poi totale stelle;
+ *  2. i primi `winnersCount` vincono e diventano i tavoli (null = tutti i
+ *     giochi votati);
+ *  3. ogni persona va al tavolo vincitore che ha gradito di più (stelle che gli
+ *     ha dato), rispettando il max giocatori; chi trabocca passa al successivo
+ *     per gradimento. Chi non ha votato nessun vincitore resta senza tavolo.
  */
-export function proposeTables(results: OptionResult[]): TablePlan {
-  // Voti ancora "liberi": nome votante → insieme di opzioni votate.
-  const pool = new Set<string>();
-  const votedOptions = new Map<string, Set<number>>(); // nome → id opzioni
-  for (const o of results) {
-    for (const name of o.voterNames) {
-      pool.add(name);
-      if (!votedOptions.has(name)) votedOptions.set(name, new Set());
-      votedOptions.get(name)!.add(o.id);
-    }
+export function proposeTables(
+  results: OptionResult[],
+  votes: VoteDetail[],
+  winnersCount: number | null,
+): TablePlan {
+  // 1. Classifica: voti, poi totale stelle, poi nome.
+  const ranked = [...results].sort((a, b) =>
+    b.votes - a.votes || b.ratingSum - a.ratingSum || a.gameName.localeCompare(b.gameName));
+  const cut = winnersCount && winnersCount > 0 ? winnersCount : ranked.length;
+  const ranking: RankedGame[] = ranked.map((o, i) => ({
+    ...o, rank: i + 1, winner: i < cut && o.votes > 0,
+  }));
+
+  const winners = ranking.filter((r) => r.winner);
+  const rankIndex = new Map(winners.map((o, i) => [o.id, i]));
+  const winnerById = new Map(winners.map((o) => [o.id, o]));
+
+  // 2. Preferenze di ciascuno fra i giochi vincitori che ha votato, per
+  //    gradimento (stelle) decrescente, poi per posizione in classifica.
+  const prefByVoter = new Map<string, { optionId: number; rating: number }[]>();
+  const allVoters = new Set<string>();
+  for (const v of votes) {
+    allVoters.add(v.voterName);
+    if (!winnerById.has(v.optionId)) continue;
+    if (!prefByVoter.has(v.voterName)) prefByVoter.set(v.voterName, []);
+    prefByVoter.get(v.voterName)!.push({ optionId: v.optionId, rating: v.rating ?? 0 });
+  }
+  for (const list of prefByVoter.values()) {
+    list.sort((a, b) => b.rating - a.rating || rankIndex.get(a.optionId)! - rankIndex.get(b.optionId)!);
   }
 
-  const byId = new Map(results.map((o) => [o.id, o]));
-  const tables: GameTable[] = [];
-
-  // Un tavolo di una persona non è un tavolo: in assenza di min noto, soglia 2.
-  const effMin = (o: OptionResult) => Math.max(o.minPlayers ?? 2, 1);
-
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    // Per ogni opzione, i suoi votanti ancora liberi.
-    let best: { opt: OptionResult; avail: string[] } | null = null;
-    for (const o of results) {
-      const avail = o.voterNames.filter((n) => pool.has(n));
-      if (avail.length < effMin(o)) continue;
-      if (!best
-        || avail.length > best.avail.length
-        || (avail.length === best.avail.length && o.votes > best.opt.votes)) {
-        best = { opt: o, avail };
+  // 3. Chi ha una preferenza più forte (gradimento top più alto) sceglie prima.
+  const voters = [...prefByVoter.keys()].sort((a, b) => {
+    const ra = prefByVoter.get(a)![0]?.rating ?? 0;
+    const rb = prefByVoter.get(b)![0]?.rating ?? 0;
+    return rb - ra || a.localeCompare(b);
+  });
+  const seats = new Map<number, string[]>(winners.map((o) => [o.id, []]));
+  const seated = new Set<string>();
+  for (const voter of voters) {
+    for (const p of prefByVoter.get(voter)!) {
+      const o = winnerById.get(p.optionId)!;
+      const cap = o.maxPlayers ?? Infinity;
+      if (seats.get(p.optionId)!.length < cap) {
+        seats.get(p.optionId)!.push(voter);
+        seated.add(voter);
+        break;
       }
     }
-    if (!best) break;
-
-    // Siedono prima i meno flessibili (meno opzioni ancora aperte votate).
-    const stillOpen = (name: string) =>
-      [...(votedOptions.get(name) ?? [])].filter((id) => {
-        const o = byId.get(id)!;
-        return o.voterNames.filter((n) => pool.has(n)).length >= effMin(o);
-      }).length;
-    const ordered = [...best.avail].sort((a, b) => stillOpen(a) - stillOpen(b) || a.localeCompare(b));
-
-    const cap = best.opt.maxPlayers ?? ordered.length;
-    const seated = ordered.slice(0, cap);
-    for (const n of seated) pool.delete(n);
-
-    tables.push({
-      bggId: best.opt.bggId,
-      gameName: best.opt.gameName,
-      gameThumbnail: best.opt.gameThumbnail,
-      players: seated,
-    });
   }
 
-  return { tables, unseated: [...pool].sort((a, b) => a.localeCompare(b)) };
+  const tables: GameTable[] = winners
+    .filter((o) => seats.get(o.id)!.length > 0)
+    .map((o) => ({
+      bggId: o.bggId, gameName: o.gameName, gameThumbnail: o.gameThumbnail,
+      minPlayers: o.minPlayers, maxPlayers: o.maxPlayers,
+      players: seats.get(o.id)!,
+      short: o.minPlayers != null && seats.get(o.id)!.length < o.minPlayers,
+    }));
+
+  const unseated = [...allVoters].filter((n) => !seated.has(n)).sort((a, b) => a.localeCompare(b));
+  return { ranking, tables, unseated };
 }

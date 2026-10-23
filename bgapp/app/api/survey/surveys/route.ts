@@ -9,7 +9,7 @@ export async function GET() {
     orderBy: [{ status: "asc" }, { createdAt: "desc" }], // "closed" < "open" alfabetico → ribaltiamo sotto
     select: {
       id: true, title: true, status: true, createdByName: true, createdAt: true,
-      multiVote: true, maxPicks: true, proposersCanVoteOwn: true,
+      playDate: true, multiVote: true, maxPicks: true, proposersCanVoteOwn: true, winnersCount: true,
       _count: { select: { options: true, votes: true } },
     },
   });
@@ -36,8 +36,16 @@ export async function POST(req: NextRequest) {
   const maxPicks = multiVote && Number.isFinite(rawMax) && rawMax >= 1 ? Math.floor(rawMax) : null;
   const proposersCanVoteOwn = !!body?.proposersCanVoteOwn;
 
+  const rawWinners = Number(body?.winnersCount);
+  const winnersCount = Number.isFinite(rawWinners) && rawWinners >= 1 ? Math.floor(rawWinners) : null;
+
+  // La data è un giorno di calendario (vedi lib/dates): la fissiamo a mezzogiorno
+  // UTC così non slitta di un giorno quando viene riletta in fusi diversi.
+  const playDateStr = typeof body?.playDate === "string" ? body.playDate.trim() : "";
+  const playDate = /^\d{4}-\d{2}-\d{2}$/.test(playDateStr) ? new Date(`${playDateStr}T12:00:00.000Z`) : null;
+
   const survey = await prisma.survey.create({
-    data: { title, createdById, createdByName, multiVote, maxPicks, proposersCanVoteOwn },
+    data: { title, createdById, createdByName, multiVote, maxPicks, proposersCanVoteOwn, winnersCount, playDate },
     select: { id: true },
   });
   return NextResponse.json({ id: survey.id });

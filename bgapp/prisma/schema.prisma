@@ -213,6 +213,8 @@ model Settings {
 model Survey {
   id        Int            @id @default(autoincrement())
   title     String
+  /// Quando si gioca. Giorno di calendario (vedi lib/dates), opzionale.
+  playDate  DateTime?
   /// Chi ha creato il sondaggio (è un ospite come gli altri).
   createdById   Int
   createdByName String
@@ -220,6 +222,9 @@ model Survey {
   multiVote           Boolean @default(false)  // più di una scelta?
   maxPicks            Int?                      // tetto scelte se multiVote; null = illimitato
   proposersCanVoteOwn Boolean @default(false)  // "chi propone non può votarli"
+  /// Quanti giochi "vincono" alla chiusura: i top-N più votati diventano i
+  /// tavoli su cui si distribuiscono i presenti. Null = tutti i giochi votati.
+  winnersCount        Int?
   status    String         @default("open")    // open | closed
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
@@ -261,6 +266,8 @@ model Vote {
   option    SurveyOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
   voterId   Int
   voterName String
+  /// Gradimento 1-5 che il votante dà al gioco insieme al voto. Opzionale.
+  rating    Int?
   createdAt DateTime     @default(now())
 
   @@unique([surveyId, voterId, optionId])
