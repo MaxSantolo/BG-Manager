@@ -60,13 +60,17 @@ export async function POST(
     orderBy: { createdAt: "asc" },
   });
 
-  const rules: SurveyRules = {
-    multiVote: survey.multiVote,
-    maxPicks: survey.maxPicks,
-    proposersCanVoteOwn: survey.proposersCanVoteOwn,
-  };
-  const error = validateVote(rules, options, voterId, optionIds);
-  if (error) return NextResponse.json({ error }, { status: 400 });
+  // Votare niente è lecito: significa "annulla il mio voto". Si valida solo se
+  // ci sono scelte; con zero scelte la transazione sotto si limita a cancellare.
+  if (optionIds.length > 0) {
+    const rules: SurveyRules = {
+      multiVote: survey.multiVote,
+      maxPicks: survey.maxPicks,
+      proposersCanVoteOwn: survey.proposersCanVoteOwn,
+    };
+    const error = validateVote(rules, options, voterId, optionIds);
+    if (error) return NextResponse.json({ error }, { status: 400 });
+  }
 
   await prismaTx.$transaction(async (tx) => {
     await tx.vote.deleteMany({ where: { surveyId, voterId } });

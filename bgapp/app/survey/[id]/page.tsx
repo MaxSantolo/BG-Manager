@@ -118,7 +118,7 @@ export default function SurveyDetailPage() {
             picks: [...myPicks].map(id => ({ optionId: id, rating: myRatings.get(id) ?? null })),
           }),
         });
-      if (res.ok && res.data?.results) { setResults(res.data.results); show("Voto registrato"); }
+      if (res.ok && res.data?.results) { setResults(res.data.results); show(myPicks.size === 0 ? "Voto annullato" : "Voto registrato"); }
       else show(res.data?.error ?? "Voto non riuscito", "error");
     } finally {
       setVoting(false);
