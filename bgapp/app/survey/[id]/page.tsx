@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Plus, Loader2, Search, Check, Lock, Unlock, Trash2, Users, LayoutGrid, Star,
-  CalendarDays, Trophy,
+  CalendarDays, Trophy, ExternalLink,
 } from "lucide-react";
 import { apiFetch } from "@/lib/fetchClient";
 import { useToast } from "@/components/Toast";
@@ -234,6 +234,13 @@ export default function SurveyDetailPage() {
                     <div className="flex items-center gap-2">
                       {picked && <Check size={15} style={{ color: "var(--accent-red-light)" }} />}
                       <span className="font-semibold truncate" style={{ color: "var(--text-primary)" }}>{opt.gameName}</span>
+                      <a href={`https://boardgamegeek.com/boardgame/${opt.bggId}`}
+                        target="_blank" rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className="flex-shrink-0" title="Apri su BoardGameGeek"
+                        style={{ color: "var(--accent-blue-light)" }}>
+                        <ExternalLink size={13} />
+                      </a>
                       {(opt.minPlayers || opt.maxPlayers) && (
                         <span className="text-xs flex-shrink-0" style={{ color: "var(--text-muted)" }}>
                           {opt.minPlayers ?? "?"}–{opt.maxPlayers ?? "?"}
