@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { isUniqueViolation } from "@/lib/dupCheck";
 
 export const dynamic = "force-dynamic";
 
@@ -26,16 +25,18 @@ export async function POST(
   if (!survey) return NextResponse.json({ error: "Sondaggio non trovato" }, { status: 404 });
   if (survey.status !== "open") return NextResponse.json({ error: "Il sondaggio è chiuso." }, { status: 409 });
 
-  try {
-    const option = await prisma.surveyOption.create({
-      data: { surveyId, gameId, gameName, gameThumbnail, proposedById, proposedByName },
-      select: { id: true },
-    });
-    return NextResponse.json({ id: option.id });
-  } catch (err) {
-    if (isUniqueViolation(err)) {
-      return NextResponse.json({ error: "Questo gioco è già tra le proposte." }, { status: 409 });
-    }
-    throw err;
-  }
+  // Pre-controllo del doppione: dà un 409 pulito senza dipendere dalla forma
+  // dell'errore del DB (l'adapter Neon HTTP non espone il code P2002 come
+  // quello WS). L'indice unique(surveyId, gameId) resta la garanzia d'integrità
+  // per la rara corsa fra due proposte simultanee dello stesso gioco.
+  const existing = await prisma.surveyOption.findFirst({
+    where: { surveyId, gameId }, select: { id: true },
+  });
+  if (existing) return NextResponse.json({ error: "Questo gioco è già tra le proposte." }, { status: 409 });
+
+  const option = await prisma.surveyOption.create({
+    data: { surveyId, gameId, gameName, gameThumbnail, proposedById, proposedByName },
+    select: { id: true },
+  });
+  return NextResponse.json({ id: option.id });
 }
