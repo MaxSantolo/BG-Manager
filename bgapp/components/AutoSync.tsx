@@ -15,7 +15,7 @@ export default function AutoSync() {
   const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
-    if (pathname === "/login") return;
+    if (pathname === "/login" || pathname.startsWith("/survey")) return;
     if (sessionStorage.getItem(SESSION_KEY)) return;
     sessionStorage.setItem(SESSION_KEY, "1");
 

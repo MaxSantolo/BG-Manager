@@ -201,3 +201,64 @@ model Settings {
   /// the built-in defaults from lib/status.ts. See StatusDef there.
   statusConfig    String?
 }
+
+// ─── Sondaggi "cosa giochiamo" ────────────────────────────────────────────
+// Zona multi-utente a sé, dietro la password condivisa dei sondaggi (non
+// APP_PASSWORD). L'identità del partecipante è un Player, ma qui è salvata come
+// scalare (playerId + nome snapshot), NON come relazione: così il modello
+// Player resta intatto, e voti/proposte sopravvivono a rinomine e merge dei
+// giocatori. I modelli non toccano alcuna tabella esistente: migrazione
+// puramente additiva.
+
+model Survey {
+  id        Int            @id @default(autoincrement())
+  title     String
+  /// Chi ha creato il sondaggio (è un ospite come gli altri).
+  createdById   Int
+  createdByName String
+  /// Regole decise alla creazione, per-sondaggio.
+  multiVote           Boolean @default(false)  // più di una scelta?
+  maxPicks            Int?                      // tetto scelte se multiVote; null = illimitato
+  proposersCanVoteOwn Boolean @default(false)  // "chi propone non può votarli"
+  status    String         @default("open")    // open | closed
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  options   SurveyOption[]
+  votes     Vote[]
+
+  @@index([status])
+}
+
+model SurveyOption {
+  id        Int      @id @default(autoincrement())
+  surveyId  Int
+  survey    Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  /// Gioco proposto (dalla collezione). gameId serve a impedire doppioni; nome e
+  /// copertina sono snapshot così il voto e i risultati non rileggono mai la
+  /// tabella Game — confine netto verso i dati privati della collezione.
+  gameId        Int
+  gameName      String
+  gameThumbnail String?
+  proposedById   Int
+  proposedByName String
+  createdAt DateTime @default(now())
+  votes     Vote[]
+
+  @@unique([surveyId, gameId])
+  @@index([surveyId])
+}
+
+model Vote {
+  id        Int          @id @default(autoincrement())
+  surveyId  Int
+  survey    Survey       @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  optionId  Int
+  option    SurveyOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  voterId   Int
+  voterName String
+  createdAt DateTime     @default(now())
+
+  @@unique([surveyId, voterId, optionId])
+  @@index([surveyId])
+  @@index([optionId])
+}

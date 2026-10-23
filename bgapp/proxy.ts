@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const AUTH_COOKIE = "bgm_auth";
+const SURVEY_COOKIE = "bgm_survey";
 
 async function tokenFor(password: string): Promise<string> {
   const data = new TextEncoder().encode(password);
@@ -12,6 +13,26 @@ async function tokenFor(password: string): Promise<string> {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // ── Area sondaggi: password propria (SURVEY_PASSWORD), separata dall'app ──
+  // È uno spazio multi-utente: gli ospiti entrano qui SENZA avere APP_PASSWORD,
+  // e questo gate non deve mai lasciar passare verso il resto dell'app.
+  if (pathname === "/survey/login" || pathname.startsWith("/api/survey/auth")) {
+    return NextResponse.next(); // login dell'area sempre raggiungibile
+  }
+  if (pathname === "/survey" || pathname.startsWith("/survey/") || pathname.startsWith("/api/survey")) {
+    const surveyPw = process.env.SURVEY_PASSWORD;
+    if (!surveyPw) return NextResponse.next(); // non configurata (es. dev locale)
+    const expected = await tokenFor(surveyPw);
+    const cookie = request.cookies.get(SURVEY_COOKIE);
+    if (cookie?.value === expected) return NextResponse.next();
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+    const url = request.nextUrl.clone();
+    url.pathname = "/survey/login";
+    return NextResponse.redirect(url);
+  }
 
   // /api/bgg-cookie guards itself with its own bearer token (it's called by the
   // scheduled refresher, which has no app password) — see that route.
