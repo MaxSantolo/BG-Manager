@@ -210,6 +210,10 @@ export async function PATCH(
     const v = typeof body.preorderEta === "string" ? body.preorderEta.trim() : "";
     if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v))
       return NextResponse.json({ error: "Data di consegna non valida" }, { status: 400 });
+    // Un anno a metà (0202 mentre si digita 2026) non è una data: si rifiuta.
+    const year = v ? Number(v.slice(0, 4)) : 0;
+    if (v && (year < 2000 || year > 2100))
+      return NextResponse.json({ error: "Anno di consegna non valido" }, { status: 400 });
     data.preorderEta = v ? new Date(`${v}T00:00:00.000Z`) : null;
   }
 

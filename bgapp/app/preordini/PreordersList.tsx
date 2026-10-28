@@ -17,10 +17,10 @@ interface Source { id: number; name: string }
 const eur = (n: number) => `€${n.toFixed(2)}`;
 
 /** Prima i preordini con una consegna prevista (la più vicina in alto), poi gli altri. */
-function byEta(a: Pre, b: Pre) {
-  if (a.preorderEta && b.preorderEta) return a.preorderEta.localeCompare(b.preorderEta) || a.name.localeCompare(b.name);
-  if (a.preorderEta) return -1;
-  if (b.preorderEta) return 1;
+function byEta(a: { eta: string | null; name: string }, b: { eta: string | null; name: string }) {
+  if (a.eta && b.eta) return a.eta.localeCompare(b.eta) || a.name.localeCompare(b.name);
+  if (a.eta) return -1;
+  if (b.eta) return 1;
   return a.name.localeCompare(b.name);
 }
 
@@ -40,6 +40,41 @@ export default function PreordersList({ initialGames, initialSources }: { initia
       setGames((prev) => prev.map((x) => (x.id === g.id ? before : x)));
       show(res.networkError ? "Connessione assente. Riprova." : "Modifica non salvata.", "error");
     }
+  }
+
+  // Consegna prevista: il campo data emette un valore a ogni tasto (mentre scrivi
+  // l'anno passa per 0002, 0020, 0202…). Salvare ogni volta lasciava anni a metà
+  // e mandava richieste che potevano arrivare fuori ordine. Quindi: la vista si
+  // aggiorna subito, il salvataggio parte dopo una pausa e solo per un anno
+  // plausibile; se fallisce si torna all'ultimo valore salvato.
+  const etaTimers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  // Date confermate dal server: servono per tornare indietro se il salvataggio
+  // fallisce, e per ordinare l'elenco senza far saltare la riga mentre si scrive.
+  const savedEtaRef = useRef(new Map(initialGames.map((g) => [g.id, g.preorderEta])));
+  const [savedEta, setSavedEta] = useState(() => new Map(savedEtaRef.current));
+  useEffect(() => { const timers = etaTimers.current; return () => timers.forEach(clearTimeout); }, []);
+
+  function changeEta(g: Pre, v: string) {
+    setGames((prev) => prev.map((x) => (x.id === g.id ? { ...x, preorderEta: v || null } : x)));
+    const pending = etaTimers.current.get(g.id);
+    if (pending) clearTimeout(pending);
+    const year = v ? Number(v.slice(0, 4)) : 0;
+    if (v && (year < 2000 || year > 2100)) return; // anno incompleto: si aspetta
+    etaTimers.current.set(g.id, setTimeout(async () => {
+      etaTimers.current.delete(g.id);
+      const res = await apiFetch(`/api/games/${g.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ preorderEta: v || null }),
+      });
+      if (res.ok) {
+        savedEtaRef.current.set(g.id, v || null);
+        setSavedEta(new Map(savedEtaRef.current));
+        return;
+      }
+      const back = savedEtaRef.current.get(g.id) ?? null;
+      setGames((prev) => prev.map((x) => (x.id === g.id ? { ...x, preorderEta: back } : x)));
+      show(res.networkError ? "Connessione assente. Riprova." : "Data di consegna non salvata.", "error");
+    }, 700));
   }
 
   async function arrived(g: Pre) {
@@ -73,7 +108,9 @@ export default function PreordersList({ initialGames, initialSources }: { initia
       </div>
 
       <div className="flex flex-col gap-2">
-        {[...games].sort(byEta).map((g) => (
+        {[...games]
+          .sort((a, b) => byEta({ eta: savedEta.get(a.id) ?? null, name: a.name }, { eta: savedEta.get(b.id) ?? null, name: b.name }))
+          .map((g) => (
           <div key={g.id} className="card p-3 space-y-3">
             <div className="flex items-center gap-3">
               {g.thumbnail
@@ -106,7 +143,7 @@ export default function PreordersList({ initialGames, initialSources }: { initia
               <div>
                 <p className="field-label" style={{ color: "var(--text-secondary)" }}>Consegna prevista</p>
                 <DateInput value={dayInput(g.preorderEta)} className="w-full text-sm"
-                  onChange={(v) => patch(g, { preorderEta: v || null })} />
+                  onChange={(v) => changeEta(g, v)} />
               </div>
               <div>
                 <p className="field-label" style={{ color: "var(--text-secondary)" }}>Pagamento</p>
