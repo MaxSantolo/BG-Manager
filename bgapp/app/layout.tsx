@@ -5,8 +5,6 @@ import NavigationGuard from "@/components/NavigationGuard";
 import AutoSync from "@/components/AutoSync";
 import { ToastProvider } from "@/components/Toast";
 import { StatusProvider } from "@/components/StatusProvider";
-import { LanguageProvider } from "@/components/i18n/LanguageProvider";
-import { getLang } from "@/lib/i18nServer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -36,26 +34,23 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const lang = await getLang();
   return (
-    <html lang={lang} className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="it" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="min-h-screen flex flex-col">
-        <LanguageProvider initialLang={lang}>
-          <ToastProvider>
-            <StatusProvider>
-              <NavigationGuard />
-              <AutoSync />
-              <main className="safe-bottom flex-1 max-w-screen-2xl mx-auto w-full px-4 py-6">
-                {children}
-              </main>
-            </StatusProvider>
-          </ToastProvider>
-        </LanguageProvider>
+        <ToastProvider>
+          <StatusProvider>
+            <NavigationGuard />
+            <AutoSync />
+            <main className="safe-bottom flex-1 max-w-screen-2xl mx-auto w-full px-4 py-6">
+              {children}
+            </main>
+          </StatusProvider>
+        </ToastProvider>
       </body>
     </html>
   );
