@@ -30,9 +30,17 @@ export async function findBggConflict(
   return null;
 }
 
-/** True when a thrown error is a Prisma unique-constraint violation (P2002). */
+/**
+ * True when a thrown error is a unique-constraint violation. Two shapes, both
+ * PrismaClientKnownRequestError: "P2002" from the WS client (prismaTx), and the
+ * raw Postgres SQLSTATE "23505" from the Neon HTTP adapter (prisma), which does
+ * NOT map it to P2002. Checking only P2002 silently missed every HTTP-client
+ * call site (verified: duplicate location name -> 500 instead of reuse).
+ */
 export function isUniqueViolation(err: unknown): boolean {
-  return !!err && typeof err === "object" && (err as { code?: string }).code === "P2002";
+  if (!err || typeof err !== "object") return false;
+  const code = (err as { code?: string }).code;
+  return code === "P2002" || code === "23505";
 }
 
 /** True when a thrown error is Prisma "record not found" (P2025), i.e. update/delete on a missing id. */
