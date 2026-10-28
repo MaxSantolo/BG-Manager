@@ -207,7 +207,7 @@ function buildHIndex(
   };
 }
 
-function buildCostByYear(games: { purchaseDate: Date | null; cost: number | null; saleDate: Date | null; salePrice: number | null }[]) {
+function buildCostByYear(games: { status: string; purchaseDate: Date | null; cost: number | null; saleDate: Date | null; salePrice: number | null }[]) {
   const byYear: Record<string, { purchased: number; sold: number; cost: number; revenue: number }> = {};
   for (const g of games) {
     if (g.purchaseDate) {
@@ -216,7 +216,9 @@ function buildCostByYear(games: { purchaseDate: Date | null; cost: number | null
       byYear[y].purchased++;
       byYear[y].cost += g.cost ?? 0;
     }
-    if (g.saleDate) {
+    // Una vendita è un gioco VENDUTO con la sua data: una data di vendita rimasta
+    // su un gioco ancora in casa (è successo: Algae, Recall) non è una vendita.
+    if (g.saleDate && g.status === "Venduto") {
       const y = String(new Date(g.saleDate).getUTCFullYear());
       if (!byYear[y]) byYear[y] = { purchased: 0, sold: 0, cost: 0, revenue: 0 };
       byYear[y].sold++;
