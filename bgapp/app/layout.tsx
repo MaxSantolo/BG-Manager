@@ -41,12 +41,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="it" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body className="min-h-screen flex flex-col">
+      <body className="min-h-screen flex flex-col lg:flex-row">
         <ToastProvider>
           <StatusProvider>
             <NavigationGuard />
             <AutoSync />
-            <main className="safe-bottom flex-1 max-w-screen-2xl mx-auto w-full px-4 py-6">
+            <main className="safe-bottom flex-1 min-w-0 max-w-screen-2xl mx-auto w-full px-4 lg:px-8 py-6">
               {children}
             </main>
           </StatusProvider>

@@ -67,7 +67,7 @@ export default function AutoSync() {
 
   return (
     <div
-      className="safe-fixed-bottom fixed left-6 z-50 flex items-center gap-2 px-3 py-2 rounded-lg text-xs shadow-lg"
+      className="safe-fixed-bottom fixed left-6 lg:left-60 z-50 flex items-center gap-2 px-3 py-2 rounded-lg text-xs shadow-lg"
       style={{
         backgroundColor: "var(--bg-card)",
         border: "1px solid var(--border)",
