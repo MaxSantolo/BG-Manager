@@ -133,7 +133,10 @@ export async function PUT(
         ...(relinked ? { bggCollId: null } : {}),
         insert:       body.insert,
         purchaseDate: body.purchaseDate   ? new Date(body.purchaseDate) : null,
-        saleDate:     body.saleDate       ? new Date(body.saleDate) : null,
+        // Data di vendita solo sui venduti (stato finale, dopo la regola del
+        // prezzo). Senza stato nel corpo il comportamento resta quello di prima.
+        saleDate:     (resolvedStatus === undefined || resolvedStatus === "Venduto") && body.saleDate
+                        ? new Date(body.saleDate) : null,
         thumbnail:    body.thumbnail      ?? null,
         image:        body.image          ?? null,
         description:  body.description    ?? null,

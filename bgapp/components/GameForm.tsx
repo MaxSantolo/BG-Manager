@@ -210,7 +210,7 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
       payload.cost         = cost || null;
       payload.salePrice    = salePrice || null;
       payload.purchaseDate = purchaseDate || null;
-      payload.saleDate     = saleDate || null;
+      payload.saleDate     = status === "Venduto" ? (saleDate || null) : null;
       payload.sleeves      = sleevesData;
     }
 
@@ -499,10 +499,14 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
                 <Label>Data acquisto</Label>
                 <DateInput value={purchaseDate} onChange={setPurchaseDate} className="w-full" />
               </div>
-              <div>
-                <Label>Data vendita</Label>
-                <DateInput value={saleDate} onChange={setSaleDate} className="w-full" />
-              </div>
+              {/* Solo per i venduti: una data di vendita su un gioco in casa è un errore
+                  (era capitato). Mettere un prezzo porta lo stato a Venduto e la fa apparire. */}
+              {status === "Venduto" && (
+                <div>
+                  <Label>Data vendita</Label>
+                  <DateInput value={saleDate} onChange={setSaleDate} className="w-full" />
+                </div>
+              )}
             </>
           )}
         </div>

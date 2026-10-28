@@ -110,7 +110,9 @@ export async function POST(request: NextRequest) {
         expansionOfId: expansionOfId ?? null,
         insert:       body.insert          || "No",
         purchaseDate: body.purchaseDate    ? new Date(body.purchaseDate) : null,
-        saleDate:     body.saleDate        ? new Date(body.saleDate) : null,
+        // Data di vendita solo se il gioco nasce venduto.
+        saleDate:     (body.status || "InCollezione") === "Venduto" && body.saleDate
+                        ? new Date(body.saleDate) : null,
         thumbnail:    bggData?.thumbnail   || body.thumbnail   || null,
         image:        bggData?.image       || body.image       || null,
         description:  bggData?.description || body.description || null,
