@@ -25,6 +25,13 @@ model Game {
   /// Where the box physically is. Optional, free registry (see Location).
   locationId    Int?
   location      Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  /// "Espansione per": il gioco base di cui questo è un'espansione. Facoltativo,
+  /// ha senso solo con type = "Espansione". Albero piatto: il base non può essere
+  /// a sua volta un'espansione (lo impone l'API). Cancellare il base non
+  /// cancella l'espansione, le toglie solo il collegamento.
+  expansionOfId Int?
+  expansionOf   Game?     @relation("Expansions", fields: [expansionOfId], references: [id], onDelete: SetNull)
+  expansions    Game[]    @relation("Expansions")
   /// How the winner of a play is decided: high|low (auto from scores),
   /// coop (shared win/loss), manual (tick winners by hand). See lib/winner.ts.
   winMode       String    @default("high")
@@ -55,6 +62,7 @@ model Game {
   @@index([bggId])
   @@index([status])
   @@index([locationId])
+  @@index([expansionOfId])
 }
 
 model WishlistGame {

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { prismaTx } from "@/lib/prismaTx";
 import { findBggConflict, isUniqueViolation, isNotFound } from "@/lib/dupCheck";
 import { asWinMode } from "@/lib/winner";
+import { expansionOfFromBody, checkExpansionOf } from "@/lib/expansion";
 import {
   ensureCollectionItemOnBgg,
   updateCollectionStatusOnBgg,
@@ -91,6 +92,14 @@ export async function PUT(
   const resolvedStatus =
     salePriceNum != null && salePriceNum > 0 ? "Venduto" : body.status;
 
+  // "Espansione per": undefined = non toccare; null se il tipo non è più
+  // Espansione; altrimenti va verificato (non sé stesso, base non-espansione).
+  const expansionOfId = expansionOfFromBody(body);
+  if (expansionOfId != null) {
+    const err = await checkExpansionOf(expansionOfId, gameIdNum);
+    if (err) return NextResponse.json({ error: err }, { status: 400 });
+  }
+
   // Re-linking to a bggId already owned by another game (or on the wishlist)
   // would violate one-row-per-BGG-id — reject before writing.
   if (relinked && newBggId != null) {
@@ -124,6 +133,7 @@ export async function PUT(
         winMode:      body.winMode ?? undefined,
         playedBefore: typeof body.playedBefore === "boolean" ? body.playedBefore : undefined,
         locationId:   "locationId" in body ? (body.locationId != null ? parseInt(body.locationId) : null) : undefined,
+        expansionOfId,
         ...(relinked ? { bggCollId: null } : {}),
         insert:       body.insert,
         purchaseDate: body.purchaseDate   ? new Date(body.purchaseDate) : null,

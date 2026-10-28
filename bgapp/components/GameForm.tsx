@@ -15,6 +15,7 @@ import { apiFetch } from "@/lib/fetchClient";
 import { useStatuses } from "@/components/StatusProvider";
 import { GAME_TYPES, INSERT_OPTIONS } from "@/lib/types";
 import { WIN_MODES, asWinMode } from "@/lib/winner";
+import BaseGamePicker, { type BaseGame } from "@/components/BaseGamePicker";
 
 type Mode = "collection" | "wishlist";
 
@@ -63,6 +64,10 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
   const [type, setType]             = useState(String(initialData?.type ?? "Base"));
   const [status, setStatus]         = useState(String(initialData?.status ?? (isWishlist ? "" : "InCollezione")));
   const [winMode, setWinMode]       = useState(asWinMode(initialData?.winMode as string | undefined));
+  const [expansionOf, setExpansionOf] = useState<BaseGame | null>(() => {
+    const e = initialData?.expansionOf as { id?: number; name?: string } | null | undefined;
+    return e?.id && e.name ? { id: e.id, name: e.name } : null;
+  });
   const [locationId, setLocationId] = useState<number | null>(
     initialData?.locationId != null ? Number(initialData.locationId) : null
   );
@@ -200,6 +205,7 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
       payload.status       = status;
       payload.winMode      = winMode;
       payload.locationId   = locationId;
+      payload.expansionOfId = type === "Espansione" ? (expansionOf?.id ?? null) : null;
       payload.playedBefore = playedBefore;
       payload.cost         = cost || null;
       payload.salePrice    = salePrice || null;
@@ -419,6 +425,12 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
               {GAME_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
+          {!isWishlist && type === "Espansione" && (
+            <div className="sm:col-span-2">
+              <Label>Espansione per</Label>
+              <BaseGamePicker value={expansionOf} onChange={setExpansionOf} excludeId={id} />
+            </div>
+          )}
 
           {isWishlist ? (
             <>

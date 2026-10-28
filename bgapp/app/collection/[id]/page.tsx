@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { formatDay } from "@/lib/dates";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, ExternalLink, Star, Trophy, Clock, Plus, MapPin } from "lucide-react";
+import { ChevronLeft, ExternalLink, Star, Trophy, Clock, Plus, MapPin, Puzzle } from "lucide-react";
 import GameForm from "@/components/GameForm";
 import LoanManager from "@/components/LoanManager";
 import LogPlayModal from "@/components/LogPlayModal";
@@ -25,6 +25,9 @@ export default async function GameDetailPage({
         gameSleeves: { include: { sleeve: true } },
         loans: { orderBy: { loanDate: "desc" } },
         location: { select: { id: true, name: true } },
+        expansionOf: { select: { id: true, name: true } },
+        // Solo le espansioni "vere": se una ha cambiato tipo, non è più figlia.
+        expansions: { where: { type: "Espansione" }, select: { id: true, name: true }, orderBy: { name: "asc" } },
       },
     }),
     prisma.play.findMany({
@@ -76,6 +79,32 @@ export default async function GameDetailPage({
               </a>
             )}
           </div>
+          {/* Espansione ⇄ gioco base */}
+          {game.type === "Espansione" && game.expansionOf && (
+            <p className="text-sm mt-1.5 inline-flex items-center gap-1.5" style={{ color: "var(--text-secondary)" }}>
+              <Puzzle size={13} style={{ color: "var(--text-muted)" }} />
+              Espansione per{" "}
+              <Link href={`/collection/${game.expansionOf.id}?from=${encodeURIComponent(`/collection/${game.id}`)}`}
+                className="font-medium hover:underline" style={{ color: "var(--accent-blue-light)" }}>
+                {game.expansionOf.name}
+              </Link>
+            </p>
+          )}
+          {game.expansions.length > 0 && (
+            <p className="text-sm mt-1.5 flex items-start gap-1.5" style={{ color: "var(--text-secondary)" }}>
+              <Puzzle size={13} className="mt-0.5 flex-shrink-0" style={{ color: "var(--text-muted)" }} />
+              <span>
+                Espansioni ({game.expansions.length}):{" "}
+                {game.expansions.map((x, i) => (
+                  <span key={x.id}>
+                    {i > 0 && ", "}
+                    <Link href={`/collection/${x.id}?from=${encodeURIComponent(`/collection/${game.id}`)}`}
+                      className="hover:underline" style={{ color: "var(--accent-blue-light)" }}>{x.name}</Link>
+                  </span>
+                ))}
+              </span>
+            </p>
+          )}
         </div>
       </div>
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { prismaTx } from "@/lib/prismaTx";
 import { getBggGame } from "@/lib/bgg";
+import { expansionOfFromBody, checkExpansionOf, EXPANSION_TYPE } from "@/lib/expansion";
 import { findBggConflict, isUniqueViolation } from "@/lib/dupCheck";
 import { ensureCollectionItemOnBgg, withBggTimeout, bggPushResult } from "@/lib/bggWrite";
 
@@ -20,6 +21,8 @@ export async function GET(request: NextRequest) {
   const status  = searchParams.get("status") || "";
   const type    = searchParams.get("type") || "";
   const bggId   = searchParams.get("bggId");
+  // Selettore "Espansione per": solo giochi che possono fare da base.
+  const baseOnly = searchParams.get("baseOnly") === "1";
   const page    = parseInt(searchParams.get("page") || "1");
   const limit   = parseInt(searchParams.get("limit") || "50");
   const skip    = (page - 1) * limit;
@@ -29,6 +32,7 @@ export async function GET(request: NextRequest) {
     ...(status ? { status } : {}),
     ...(type   ? { type }   : {}),
     ...(bggId  ? { bggId: parseInt(bggId) } : {}),
+    ...(baseOnly && !type ? { type: { not: EXPANSION_TYPE } } : {}),
   };
 
   const [games, total] = await Promise.all([
@@ -69,6 +73,13 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // "Espansione per": solo per il tipo Espansione, e verso un base valido.
+  const expansionOfId = expansionOfFromBody({ ...body, type: body.type || "Base" });
+  if (expansionOfId != null) {
+    const err = await checkExpansionOf(expansionOfId);
+    if (err) return NextResponse.json({ error: err }, { status: 400 });
+  }
+
   // If bggId provided and no thumbnail yet, auto-fetch from BGG
   let bggData = null;
   if (body.bggId && !body.thumbnail) {
@@ -96,6 +107,7 @@ export async function POST(request: NextRequest) {
         winMode:      body.winMode          || "high",
         playedBefore: body.playedBefore === true,
         locationId:   body.locationId != null ? parseInt(body.locationId) : null,
+        expansionOfId: expansionOfId ?? null,
         insert:       body.insert          || "No",
         purchaseDate: body.purchaseDate    ? new Date(body.purchaseDate) : null,
         saleDate:     body.saleDate        ? new Date(body.saleDate) : null,
