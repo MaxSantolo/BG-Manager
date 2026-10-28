@@ -8,6 +8,13 @@
  * mapping, and form visibility — plus brand-new custom statuses.
  */
 
+/**
+ * Stati che NON stanno nella Collezione: i venduti e i preordinati hanno una
+ * pagina loro (/venduti, /preordini), i "giocato come ospite" non sono tuoi.
+ * Unica fonte per la pagina Collezione e per il suo filtro stati.
+ */
+export const OUT_OF_COLLECTION = ["Venduto", "Preordinato", "GiocatoEsterno"];
+
 /** BGG collection flags we can map to/from. */
 export type BggFlag = "own" | "prevowned" | "fortrade" | "preordered" | "wishlist";
 

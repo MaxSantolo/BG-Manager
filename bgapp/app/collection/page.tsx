@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import CollectionTable from "./CollectionTable";
 import EnrichButton from "./EnrichButton";
 import CollectionImporter from "@/components/CollectionImporter";
+import { OUT_OF_COLLECTION } from "@/lib/status";
 
 interface SearchParams {
   search?: string;
@@ -40,10 +41,12 @@ export default async function CollectionPage({
 
   const where = {
     ...(search ? { name: { contains: search, mode: "insensitive" as const } } : {}),
-    // Senza un filtro esplicito la collezione mostra solo ciò che possiedi:
-    // i venduti (storia) e i "Giocato (ospite)" restano fuori, ma raggiungibili
-    // scegliendoli dal filtro stati.
-    ...(status ? { status } : { status: { notIn: ["Venduto", "GiocatoEsterno"] } }),
+    // La collezione è ciò che hai in casa: venduti, preordinati e "giocato come
+    // ospite" ne stanno fuori SEMPRE, anche se l'URL chiede quello stato (i primi
+    // due hanno pagine loro). Un filtro su uno stato escluso viene ignorato.
+    ...(status && !OUT_OF_COLLECTION.includes(status)
+      ? { status }
+      : { status: { notIn: OUT_OF_COLLECTION } }),
     ...(type   ? { type }   : {}),
     ...(location ? { locationId: parseInt(location) } : {}),
   };

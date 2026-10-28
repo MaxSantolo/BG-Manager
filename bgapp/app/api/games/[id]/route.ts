@@ -5,13 +5,9 @@ import { findBggConflict, isUniqueViolation, isNotFound } from "@/lib/dupCheck";
 import { asWinMode } from "@/lib/winner";
 import { expansionOfFromBody, checkExpansionOf } from "@/lib/expansion";
 import {
-  ensureCollectionItemOnBgg,
-  updateCollectionStatusOnBgg,
   clearCollectionStatusOnBgg,
-  statusMapsToBgg,
-  withBggTimeout,
   BggWriteError,
-  bggPushResult,
+  syncGameStatusToBgg,
 } from "@/lib/bggWrite";
 
 export const maxDuration = 60;
@@ -174,26 +170,9 @@ export async function PUT(
 
   // BGG is authoritative for status, so a local change has to reach it —
   // otherwise the next sync would simply undo what was just saved here.
-  let bgg: { pushed: boolean; pending?: boolean; error?: string } = { pushed: false };
-  const statusChanged = before && before.status !== game.status;
-  if (game.bggId && await statusMapsToBgg(game.status)) {
-    try {
-      if (!game.bggCollId) {
-        // Never made it to BGG (added before this existed, or the push failed).
-        const collId = await withBggTimeout(ensureCollectionItemOnBgg(game.bggId, game.status));
-        if (collId) {
-          await prisma.game.update({ where: { id: game.id }, data: { bggCollId: collId } });
-          bgg = { pushed: true };
-        }
-      } else if (statusChanged) {
-        await withBggTimeout(updateCollectionStatusOnBgg(game.bggCollId, game.status));
-        bgg = { pushed: true };
-      }
-    } catch (err) {
-      // Local update already committed; a slow BGG push is reconciled by sync.
-      bgg = bggPushResult(err);
-    }
-  }
+  // Senza "before" non si sa se lo stato è cambiato: trattalo come invariato,
+  // esattamente come faceva il vecchio `before && before.status !== ...`.
+  const bgg = await syncGameStatusToBgg(game, before?.status ?? game.status);
 
   return NextResponse.json({ ...gameWithSleeves, bgg });
 }
@@ -212,13 +191,27 @@ export async function PATCH(
   const body = await req.json().catch(() => ({}));
 
   // Only the small, self-contained fields the UI flips from outside the full
-  // form: the winner rule (play modal) and the never-played / position fields
-  // (games list, "mai giocati" page). Anything omitted is left untouched.
-  const data: { winMode?: string; playedBefore?: boolean; locationId?: number | null } = {};
+  // form: the winner rule (play modal), the never-played / position fields
+  // (games list, "mai giocati" page) and the pre-order fields (Preordini page).
+  // Anything omitted is left untouched.
+  const data: {
+    winMode?: string; playedBefore?: boolean; locationId?: number | null;
+    preorderSourceId?: number | null; preorderPaid?: boolean; preorderEta?: Date | null;
+  } = {};
   if (typeof body?.winMode === "string") data.winMode = asWinMode(body.winMode);
   if (typeof body?.playedBefore === "boolean") data.playedBefore = body.playedBefore;
   if ("locationId" in body)
     data.locationId = body.locationId == null ? null : parseInt(body.locationId);
+  if ("preorderSourceId" in body)
+    data.preorderSourceId = body.preorderSourceId == null ? null : parseInt(body.preorderSourceId);
+  if (typeof body?.preorderPaid === "boolean") data.preorderPaid = body.preorderPaid;
+  if ("preorderEta" in body) {
+    // Giorno di calendario a mezzanotte UTC (lib/dates). Stringa vuota = svuota.
+    const v = typeof body.preorderEta === "string" ? body.preorderEta.trim() : "";
+    if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v))
+      return NextResponse.json({ error: "Data di consegna non valida" }, { status: 400 });
+    data.preorderEta = v ? new Date(`${v}T00:00:00.000Z`) : null;
+  }
 
   if (Object.keys(data).length === 0)
     return NextResponse.json({ error: "nessun campo aggiornabile nel corpo" }, { status: 400 });
@@ -227,7 +220,10 @@ export async function PATCH(
     const game = await prisma.game.update({
       where: { id: parseInt(id) },
       data,
-      select: { winMode: true, playedBefore: true, locationId: true },
+      select: {
+        winMode: true, playedBefore: true, locationId: true,
+        preorderSourceId: true, preorderPaid: true, preorderEta: true,
+      },
     });
     return NextResponse.json(game);
   } catch (err) {

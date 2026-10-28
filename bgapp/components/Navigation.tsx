@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Library, Heart, BarChart3, BookOpen, Package, LogOut, Menu, Dice5, Trophy, Settings, Users, Sparkles } from "lucide-react";
+import { Library, Heart, BarChart3, BookOpen, Package, LogOut, Menu, Dice5, Trophy, Settings, Users, Sparkles, Truck, HandCoins } from "lucide-react";
 import { useState } from "react";
 
 const links = [
   { href: "/collection", label: "Collezione", icon: Library },
+  { href: "/preordini", label: "Preordini", icon: Truck },
+  { href: "/venduti", label: "Venduti", icon: HandCoins },
   { href: "/decide", label: "Cosa giochiamo", icon: Dice5 },
   { href: "/wishlist", label: "Desiderata", icon: Heart },
   { href: "/plays", label: "Partite", icon: Trophy },

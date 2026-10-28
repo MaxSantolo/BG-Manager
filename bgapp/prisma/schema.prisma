@@ -32,6 +32,13 @@ model Game {
   expansionOfId Int?
   expansionOf   Game?     @relation("Expansions", fields: [expansionOfId], references: [id], onDelete: SetNull)
   expansions    Game[]    @relation("Expansions")
+  /// Preordini: da dove viene (registro libero, vedi PreorderSource), se è già
+  /// pagato e quando dovrebbe arrivare (giorno di calendario, vedi lib/dates).
+  /// Restano anche dopo l'arrivo, come storico.
+  preorderSourceId Int?
+  preorderSource   PreorderSource? @relation(fields: [preorderSourceId], references: [id], onDelete: SetNull)
+  preorderPaid     Boolean         @default(false)
+  preorderEta      DateTime?
   /// How the winner of a play is decided: high|low (auto from scores),
   /// coop (shared win/loss), manual (tick winners by hand). See lib/winner.ts.
   winMode       String    @default("high")
@@ -63,6 +70,7 @@ model Game {
   @@index([status])
   @@index([locationId])
   @@index([expansionOfId])
+  @@index([preorderSourceId])
 }
 
 model WishlistGame {
@@ -194,6 +202,17 @@ model Location {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+/// Provenienze dei preordini (Kickstarter, Gamefound, un negozio…): registro
+/// libero a cui si aggiungono voci dal selettore. Cancellarne una non cancella i
+/// giochi, svuota solo il campo.
+model PreorderSource {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  games     Game[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 
 model Settings {
   id              Int       @id @default(autoincrement())

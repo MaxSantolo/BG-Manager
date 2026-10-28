@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Search, ChevronLeft, ChevronRight, ExternalLink, Download } from "lucide-react";
 import { GAME_TYPES } from "@/lib/types";
 import { useStatuses } from "@/components/StatusProvider";
+import { OUT_OF_COLLECTION } from "@/lib/status";
 import StatusBadge from "@/components/StatusBadge";
 import GameCard from "./GameCard";
 
@@ -144,7 +145,7 @@ export default function CollectionTable({
         </div>
         <select value={status} onChange={(e) => onStatus(e.target.value)} className="text-sm w-full sm:w-auto">
           <option value="">Tutti gli stati</option>
-          {statuses.filter((s) => !s.hidden).map((s) => (
+          {statuses.filter((s) => !s.hidden && !OUT_OF_COLLECTION.includes(s.key)).map((s) => (
             <option key={s.key} value={s.key}>{s.label}</option>
           ))}
         </select>

@@ -102,7 +102,9 @@ export default async function StatisticsPage() {
 
       <StatCards
         totals={{
-          all: allGames.length,
+          // Giochi tuoi: niente venduti né "giocato come ospite" (stesso criterio
+          // della dashboard). I venduti restano contati a parte nella loro card.
+          all: allGames.filter((g) => g.status !== "Venduto" && g.status !== "GiocatoEsterno").length,
           inCollection: inCollection.length,
           forSale: forSale.length,
           preordered: preordered.length,

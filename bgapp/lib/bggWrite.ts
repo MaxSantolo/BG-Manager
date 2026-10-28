@@ -392,3 +392,36 @@ export async function deletePlayFromBgg(bggPlayId: number): Promise<void> {
     throw new BggWriteError("Risposta di BGG non leggibile.");
   }
 }
+
+/**
+ * Porta su BGG lo stato locale di un gioco appena cambiato. BGG è autorevole
+ * sullo stato: senza questa spinta la sincronizzazione successiva annullerebbe
+ * la modifica. Se il gioco non è mai arrivato su BGG lo crea lì (e salva il
+ * bggCollId); altrimenti aggiorna i flag solo se lo stato è davvero cambiato.
+ * Un errore BGG non fa fallire il salvataggio locale: la sync riconcilia.
+ * Estratta dal PUT di /api/games/[id] per riusarla tale e quale altrove.
+ */
+export async function syncGameStatusToBgg(
+  game: { id: number; bggId: number | null; bggCollId: number | null; status: string },
+  beforeStatus: string,
+): Promise<{ pushed: boolean; pending?: boolean; error?: string }> {
+  let bgg: { pushed: boolean; pending?: boolean; error?: string } = { pushed: false };
+  if (!game.bggId || !(await statusMapsToBgg(game.status))) return bgg;
+  try {
+    if (!game.bggCollId) {
+      // Never made it to BGG (added before this existed, or the push failed).
+      const collId = await withBggTimeout(ensureCollectionItemOnBgg(game.bggId, game.status));
+      if (collId) {
+        await prisma.game.update({ where: { id: game.id }, data: { bggCollId: collId } });
+        bgg = { pushed: true };
+      }
+    } else if (beforeStatus !== game.status) {
+      await withBggTimeout(updateCollectionStatusOnBgg(game.bggCollId, game.status));
+      bgg = { pushed: true };
+    }
+  } catch (err) {
+    // Local update already committed; a slow BGG push is reconciled by sync.
+    bgg = bggPushResult(err);
+  }
+  return bgg;
+}
