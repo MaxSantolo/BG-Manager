@@ -4,10 +4,10 @@ import Link from "next/link";
 import StatusBadge from "@/components/StatusBadge";
 import { eur, num } from "./format";
 
-interface YearData { year: string; purchased: number; sold: number; cost: number; revenue: number }
+interface YearData { year: string; purchased: number; undated: number; sold: number; cost: number; revenue: number }
 interface Coverage {
-  datedPurchases: number; totalPurchases: number;
-  datedSpend: number; totalSpend: number;
+  startLabel: string;          // inizio della collezione, "01/09/2024"
+  undatedCount: number; undatedSpend: number;
   datedSales: number; totalSales: number;
 }
 interface TopGame { id: number; name: string; cost: number; type: string; status: string }
@@ -58,7 +58,7 @@ function HBarChart({ data }: { data: { key: string; label: string; value: number
  * Spesa e incasso su RIGHE separate, ciascuna con la sua cifra: affiancate nella
  * stessa riga sembravano parti di un totale. Tutti gli anni dell'intervallo.
  */
-function YearChart({ data }: { data: YearData[] }) {
+function YearChart({ data, startLabel }: { data: YearData[]; startLabel: string }) {
   if (!data.length) return <p className="text-sm" style={{ color: "var(--text-muted)" }}>Nessuna data di acquisto o vendita.</p>;
   const max = Math.max(...data.flatMap((d) => [d.cost, d.revenue]), 1);
   const bar = (v: number, color: string, label: string) => (
@@ -77,7 +77,11 @@ function YearChart({ data }: { data: YearData[] }) {
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
             <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{d.year}</span>
             <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-              {num(d.purchased)} {d.purchased === 1 ? "acquisto" : "acquisti"} · {num(d.sold)} {d.sold === 1 ? "venduto" : "venduti"}
+              {num(d.purchased)} {d.purchased === 1 ? "acquisto" : "acquisti"}
+              {d.undated > 0 && (d.undated === d.purchased
+                ? ` senza data, fino al ${startLabel}`
+                : ` (${num(d.undated)} senza data, fino al ${startLabel})`)}
+              {" · "}{num(d.sold)} {d.sold === 1 ? "venduto" : "venduti"}
             </span>
           </div>
           {bar(d.cost, "var(--accent-blue-light)", "Spesa")}
@@ -106,13 +110,16 @@ function statusColor(key: string) {
 }
 
 export default function Charts({ byStatus, typeBreakdown, years, coverage: cv, topExpensive, topSleeves }: Props) {
-  const fullPurchases = cv.datedPurchases === cv.totalPurchases;
-  const fullSales = cv.datedSales === cv.totalSales;
-  const yearNote = fullPurchases && fullSales
-    ? "Tutti gli acquisti e le vendite hanno una data."
-    : `Conta solo ciò che ha una data: ${num(cv.datedPurchases)} acquisti su ${num(cv.totalPurchases)} `
-      + `(${eur(cv.datedSpend)} dei ${eur(cv.totalSpend)} spesi) e ${num(cv.datedSales)} vendite su ${num(cv.totalSales)}. `
-      + "Il resto non compare qui.";
+  // Acquisti: quelli senza data sono la collezione di partenza, contati
+  // all'inizio. Vendite: senza data non si sa in che anno metterle, si dice.
+  const yearNote = [
+    cv.undatedCount > 0
+      ? `Gli acquisti senza data (${num(cv.undatedCount)}, ${eur(cv.undatedSpend)}) sono contati al ${cv.startLabel}, inizio della collezione.`
+      : "Tutti gli acquisti hanno una data.",
+    cv.datedSales < cv.totalSales
+      ? `Delle vendite compaiono solo le ${num(cv.datedSales)} su ${num(cv.totalSales)} che hanno una data.`
+      : "",
+  ].filter(Boolean).join(" ");
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -126,7 +133,7 @@ export default function Charts({ byStatus, typeBreakdown, years, coverage: cv, t
       </Card>
 
       <Card title="Acquisti e vendite per anno" note={yearNote} className="lg:col-span-2">
-        <YearChart data={years} />
+        <YearChart data={years} startLabel={cv.startLabel} />
       </Card>
 
       <Card title="I 10 giochi più costosi" note="Solo i giochi in casa." className="lg:col-span-2">

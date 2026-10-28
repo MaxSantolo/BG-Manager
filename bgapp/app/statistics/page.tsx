@@ -7,8 +7,16 @@ import Charts from "./Charts";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Inizio della collezione, detto da Max: gli acquisti senza data (la collezione
+ * di partenza, prima che si registrassero le date a marzo 2026) sono "fino al
+ * 01/09/2024". Nessun gioco viene modificato: la data vale solo qui, per la
+ * spesa al giorno e per collocare quegli acquisti nel grafico per anno.
+ */
+const COLLECTION_START = new Date("2024-09-01T00:00:00.000Z");
+
 export default async function StatisticsPage() {
-  const [allGames, wishlistCount, sleeveUsageRaw, firstPlay, settings, plays, neverPlayed] = await Promise.all([
+  const [allGames, wishlistCount, sleeveUsageRaw, settings, plays, neverPlayed] = await Promise.all([
     prisma.game.findMany(),
     prisma.wishlistGame.count(),
     prisma.gameSleeve.groupBy({
@@ -18,7 +26,6 @@ export default async function StatisticsPage() {
       orderBy: { _sum: { qty: "desc" } },
       take: 10,
     }),
-    prisma.play.aggregate({ _min: { date: true } }),
     prisma.settings.findUnique({ where: { id: 1 }, select: { statusConfig: true } }),
     prisma.play.findMany({ select: { gameId: true, bggGameId: true, gameName: true, quantity: true } }),
     findNeverPlayed(),
@@ -49,13 +56,11 @@ export default async function StatisticsPage() {
   const rated     = inHouse.filter((g) => g.bggRating != null);
   const avgRating = rated.length > 0 ? rated.reduce((s, g) => s + (g.bggRating ?? 0), 0) / rated.length : null;
 
-  // Spesa media giornaliera = totale speso / giorni di attività.
-  // purchaseDate è quasi sempre vuota, quindi come inizio uso la data più antica
-  // tra il primo acquisto registrato e la prima partita giocata (segnale di attività reale).
-  const startCandidates = [...allGames.map((g) => g.purchaseDate), firstPlay._min.date]
-    .filter((d): d is Date => d != null)
-    .map((d) => new Date(d).getTime());
-  const collectionStart = startCandidates.length > 0 ? new Date(Math.min(...startCandidates)) : new Date();
+  // Spesa al giorno = totale speso / giorni dall'inizio della collezione. Se un
+  // acquisto datato fosse più vecchio dell'inizio dichiarato, si parte da lì:
+  // la media non deve mai cominciare dopo un acquisto vero.
+  const datedTimes = bought.filter((g) => g.purchaseDate).map((g) => new Date(g.purchaseDate!).getTime());
+  const collectionStart = new Date(Math.min(COLLECTION_START.getTime(), ...datedTimes));
   const daysOwned       = Math.max(1, Math.floor((Date.now() - collectionStart.getTime()) / 86_400_000));
   const dailySpend      = totalInvested / daysOwned;
 
@@ -80,12 +85,12 @@ export default async function StatisticsPage() {
   const altri = [...statusCounts.values()].reduce((a, b) => a + b, 0);
   if (altri > 0) byStatus.push({ key: "Altri", label: "Altri", value: altri });
 
-  const years = buildCostByYear(bought);
+  const years = buildCostByYear(bought, collectionStart);
+  const undated = bought.filter((g) => !g.purchaseDate);
   const coverage = {
-    datedPurchases: bought.filter((g) => g.purchaseDate).length,
-    totalPurchases: bought.length,
-    datedSpend:     bought.filter((g) => g.purchaseDate).reduce((s, g) => s + (g.cost ?? 0), 0),
-    totalSpend:     totalInvested,
+    startLabel:     formatDayNum(collectionStart),
+    undatedCount:   undated.length,
+    undatedSpend:   undated.reduce((s, g) => s + (g.cost ?? 0), 0),
     datedSales:     sold.filter((g) => g.saleDate).length,
     totalSales:     sold.length,
   };
@@ -207,22 +212,25 @@ function buildHIndex(
   };
 }
 
-function buildCostByYear(games: { status: string; purchaseDate: Date | null; cost: number | null; saleDate: Date | null; salePrice: number | null }[]) {
-  const byYear: Record<string, { purchased: number; sold: number; cost: number; revenue: number }> = {};
+function buildCostByYear(
+  games: { status: string; purchaseDate: Date | null; cost: number | null; saleDate: Date | null; salePrice: number | null }[],
+  start: Date,
+) {
+  type Year = { purchased: number; undated: number; sold: number; cost: number; revenue: number };
+  const byYear: Record<string, Year> = {};
+  const slot = (y: string) => (byYear[y] ??= { purchased: 0, undated: 0, sold: 0, cost: 0, revenue: 0 });
   for (const g of games) {
-    if (g.purchaseDate) {
-      const y = String(new Date(g.purchaseDate).getUTCFullYear());
-      if (!byYear[y]) byYear[y] = { purchased: 0, sold: 0, cost: 0, revenue: 0 };
-      byYear[y].purchased++;
-      byYear[y].cost += g.cost ?? 0;
-    }
+    // Un acquisto senza data è della collezione di partenza: va all'anno d'inizio.
+    const y = String((g.purchaseDate ? new Date(g.purchaseDate) : start).getUTCFullYear());
+    slot(y).purchased++;
+    if (!g.purchaseDate) slot(y).undated++;
+    slot(y).cost += g.cost ?? 0;
     // Una vendita è un gioco VENDUTO con la sua data: una data di vendita rimasta
     // su un gioco ancora in casa (è successo: Algae, Recall) non è una vendita.
     if (g.saleDate && g.status === "Venduto") {
-      const y = String(new Date(g.saleDate).getUTCFullYear());
-      if (!byYear[y]) byYear[y] = { purchased: 0, sold: 0, cost: 0, revenue: 0 };
-      byYear[y].sold++;
-      byYear[y].revenue += g.salePrice ?? 0;
+      const sy = String(new Date(g.saleDate).getUTCFullYear());
+      slot(sy).sold++;
+      slot(sy).revenue += g.salePrice ?? 0;
     }
   }
   // Tutti gli anni dell'intervallo, anche quelli senza movimenti: un anno che
@@ -231,7 +239,7 @@ function buildCostByYear(games: { status: string; purchaseDate: Date | null; cos
   if (ys.length === 0) return [];
   const out = [];
   for (let y = Math.min(...ys); y <= Math.max(...ys); y++) {
-    out.push({ year: String(y), ...(byYear[String(y)] ?? { purchased: 0, sold: 0, cost: 0, revenue: 0 }) });
+    out.push({ year: String(y), ...(byYear[String(y)] ?? { purchased: 0, undated: 0, sold: 0, cost: 0, revenue: 0 }) });
   }
   return out;
 }
