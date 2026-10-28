@@ -1,13 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { formatDayNum } from "@/lib/dates";
-import { parseStatusConfig, labelFor } from "@/lib/status";
+import { parseStatusConfig, labelFor, OUT_OF_COLLECTION } from "@/lib/status";
+import { findNeverPlayed } from "@/lib/neverPlayed";
 import StatCards from "./StatCards";
 import Charts from "./Charts";
 
 export const dynamic = "force-dynamic";
 
 export default async function StatisticsPage() {
-  const [allGames, wishlistCount, sleeveUsageRaw, firstPlay, settings, plays] = await Promise.all([
+  const [allGames, wishlistCount, sleeveUsageRaw, firstPlay, settings, plays, neverPlayed] = await Promise.all([
     prisma.game.findMany(),
     prisma.wishlistGame.count(),
     prisma.gameSleeve.groupBy({
@@ -20,43 +21,47 @@ export default async function StatisticsPage() {
     prisma.play.aggregate({ _min: { date: true } }),
     prisma.settings.findUnique({ where: { id: 1 }, select: { statusConfig: true } }),
     prisma.play.findMany({ select: { gameId: true, bggGameId: true, gameName: true, quantity: true } }),
+    findNeverPlayed(),
   ]);
 
   const statusConfig = parseStatusConfig(settings?.statusConfig);
 
-  const inCollection = allGames.filter((g) => g.status === "InCollezione");
-  const forSale      = allGames.filter((g) => g.status === "InVendita");
-  const preordered   = allGames.filter((g) => g.status === "Preordinato");
-  const sold         = allGames.filter((g) => g.status === "Venduto");
+  // Tre insiemi, con le stesse regole delle altre pagine:
+  //  - in casa  = la Collezione (esclusi venduti, preordinati, ospite);
+  //  - tuoi     = in casa + preordinati (il "Totale giochi", come la dashboard);
+  //  - tutto lo storico = anche i venduti, per i conti dei soldi.
+  const inHouse    = allGames.filter((g) => !OUT_OF_COLLECTION.includes(g.status));
+  const owned      = allGames.filter((g) => g.status !== "Venduto" && g.status !== "GiocatoEsterno");
+  const forSale    = allGames.filter((g) => g.status === "InVendita");
+  const preordered = allGames.filter((g) => g.status === "Preordinato");
+  const sold       = allGames.filter((g) => g.status === "Venduto");
+  const bought     = allGames.filter((g) => g.status !== "GiocatoEsterno"); // i giochi da ospite non sono acquisti
 
-  const totalInvested     = allGames.reduce((s, g) => s + (g.cost ?? 0), 0);
-  const collectionValue   = inCollection.reduce((s, g) => s + (g.cost ?? 0), 0);
-  const totalSaleRevenue  = sold.reduce((s, g) => s + (g.salePrice ?? 0), 0);
-  const totalSoldCost     = sold.reduce((s, g) => s + (g.cost ?? 0), 0);
-  const totalProfit       = totalSaleRevenue - totalSoldCost;
-  const gamesWithCost     = allGames.filter((g) => g.cost);
-  const avgCost           = gamesWithCost.length > 0 ? totalInvested / gamesWithCost.length : 0;
-  const gamesWithRating   = allGames.filter((g) => g.bggRating != null);
-  const avgRating         = gamesWithRating.length > 0
-    ? gamesWithRating.reduce((s, g) => s + (g.bggRating ?? 0), 0) / gamesWithRating.length
-    : null;
+  // Soldi: su tutto lo storico.
+  const totalInvested    = bought.reduce((s, g) => s + (g.cost ?? 0), 0);
+  const withCost         = bought.filter((g) => g.cost);
+  const avgCost          = withCost.length > 0 ? totalInvested / withCost.length : 0;
+  const collectionValue  = inHouse.reduce((s, g) => s + (g.cost ?? 0), 0);
+  const totalSaleRevenue = sold.reduce((s, g) => s + (g.salePrice ?? 0), 0);
+  const totalProfit      = totalSaleRevenue - sold.reduce((s, g) => s + (g.cost ?? 0), 0);
+
+  // Collezione: solo i giochi in casa.
+  const rated     = inHouse.filter((g) => g.bggRating != null);
+  const avgRating = rated.length > 0 ? rated.reduce((s, g) => s + (g.bggRating ?? 0), 0) / rated.length : null;
 
   // Spesa media giornaliera = totale speso / giorni di attività.
   // purchaseDate è quasi sempre vuota, quindi come inizio uso la data più antica
   // tra il primo acquisto registrato e la prima partita giocata (segnale di attività reale).
-  const startCandidates   = [
-    ...allGames.map((g) => g.purchaseDate),
-    firstPlay._min.date,
-  ]
+  const startCandidates = [...allGames.map((g) => g.purchaseDate), firstPlay._min.date]
     .filter((d): d is Date => d != null)
     .map((d) => new Date(d).getTime());
-  const collectionStart   = startCandidates.length > 0 ? new Date(Math.min(...startCandidates)) : new Date();
-  const daysOwned         = Math.max(1, Math.floor((Date.now() - collectionStart.getTime()) / 86_400_000));
-  const dailySpend        = totalInvested / daysOwned;
+  const collectionStart = startCandidates.length > 0 ? new Date(Math.min(...startCandidates)) : new Date();
+  const daysOwned       = Math.max(1, Math.floor((Date.now() - collectionStart.getTime()) / 86_400_000));
+  const dailySpend      = totalInvested / daysOwned;
 
   const hIndex = buildHIndex(plays, allGames);
 
-  const typeBreakdown = allGames.reduce(
+  const typeBreakdown = inHouse.reduce(
     (acc, g) => { acc[g.type] = (acc[g.type] ?? 0) + 1; return acc; },
     {} as Record<string, number>
   );
@@ -66,75 +71,87 @@ export default async function StatisticsPage() {
   // with the total. Anything not in the config lands in "Altri".
   const statusCounts = new Map<string, number>();
   for (const g of allGames) statusCounts.set(g.status, (statusCounts.get(g.status) ?? 0) + 1);
-  const byStatus: Record<string, number> = {};
+  const byStatus: { key: string; label: string; value: number }[] = [];
   for (const s of statusConfig) {
     const n = statusCounts.get(s.key) ?? 0;
-    if (n > 0) byStatus[labelFor(statusConfig, s.key)] = n;
+    if (n > 0) byStatus.push({ key: s.key, label: labelFor(statusConfig, s.key), value: n });
     statusCounts.delete(s.key);
   }
   const altri = [...statusCounts.values()].reduce((a, b) => a + b, 0);
-  if (altri > 0) byStatus["Altri"] = altri;
+  if (altri > 0) byStatus.push({ key: "Altri", label: "Altri", value: altri });
 
-  const costByYear = buildCostByYear(allGames);
+  const years = buildCostByYear(bought);
+  const coverage = {
+    datedPurchases: bought.filter((g) => g.purchaseDate).length,
+    totalPurchases: bought.length,
+    datedSpend:     bought.filter((g) => g.purchaseDate).reduce((s, g) => s + (g.cost ?? 0), 0),
+    totalSpend:     totalInvested,
+    datedSales:     sold.filter((g) => g.saleDate).length,
+    totalSales:     sold.length,
+  };
 
-  const topExpensive = [...allGames]
+  // Top 10 per costo, fra i giochi in casa.
+  const topExpensive = inHouse
     .filter((g) => g.cost)
     .sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0))
-    .slice(0, 10);
+    .slice(0, 10)
+    .map((g) => ({ id: g.id, name: g.name, cost: g.cost ?? 0, type: g.type, status: g.status }));
 
-  // Risolvi i nomi delle bustine per il grafico
+  // Bustine: chiave per id. Due bustine con lo stesso formato e senza etichetta
+  // avevano lo stesso nome a schermo (e la stessa chiave React: righe che
+  // sparivano o si duplicavano): le distingue la scorta.
   const sleeveIds = sleeveUsageRaw.map((s) => s.sleeveId);
-  const sleeves   = sleeveIds.length > 0
-    ? await prisma.sleeve.findMany({ where: { id: { in: sleeveIds } } })
-    : [];
-  const sleeveMap = Object.fromEntries(sleeves.map((s) => [s.id, s.label || s.size]));
-  const topSleeves = sleeveUsageRaw.map((s) => ({
-    label: sleeveMap[s.sleeveId] ?? `#${s.sleeveId}`,
-    qty:   s._sum.qty ?? 0,
-    games: s._count.gameId,
-  }));
+  const sleeves = sleeveIds.length > 0 ? await prisma.sleeve.findMany({ where: { id: { in: sleeveIds } } }) : [];
+  const byId = new Map(sleeves.map((s) => [s.id, s]));
+  const baseName = (id: number) => { const s = byId.get(id); return s ? (s.label || s.size) : `#${id}`; };
+  const nameCount = new Map<string, number>();
+  for (const s of sleeveUsageRaw) nameCount.set(baseName(s.sleeveId), (nameCount.get(baseName(s.sleeveId)) ?? 0) + 1);
+  const topSleeves = sleeveUsageRaw.map((s) => {
+    const name = baseName(s.sleeveId);
+    const stock = byId.get(s.sleeveId)?.quantity;
+    return {
+      id:    s.sleeveId,
+      label: (nameCount.get(name) ?? 0) > 1 && stock != null ? `${name} · scorta ${stock}` : name,
+      qty:   s._sum.qty ?? 0,
+      games: s._count.gameId,
+    };
+  });
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>
-        Statistiche
-      </h1>
+    <div className="space-y-8">
+      <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Statistiche</h1>
 
       <StatCards
-        totals={{
-          // Giochi tuoi: niente venduti né "giocato come ospite" (stesso criterio
-          // della dashboard). I venduti restano contati a parte nella loro card.
-          all: allGames.filter((g) => g.status !== "Venduto" && g.status !== "GiocatoEsterno").length,
-          inCollection: inCollection.length,
+        collection={{
+          total: owned.length,
+          inHouse: inHouse.length,
           forSale: forSale.length,
           preordered: preordered.length,
           sold: sold.length,
           wishlist: wishlistCount,
+          avgRating: avgRating != null ? round2(avgRating) : null,
+          ratedCount: rated.length,
         }}
-        finances={{
+        plays={{ ...hIndex, neverPlayed: neverPlayed.length }}
+        money={{
           totalInvested:    round2(totalInvested),
+          avgCost:          round2(avgCost),
           collectionValue:  round2(collectionValue),
           totalSaleRevenue: round2(totalSaleRevenue),
           totalProfit:      round2(totalProfit),
-          avgCost:          round2(avgCost),
-          avgRating:        avgRating != null ? round2(avgRating) : null,
+          soldCount:        sold.length,
           dailySpend:       round2(dailySpend),
           daysOwned,
           startDate:        formatDayNum(collectionStart),
         }}
-        plays={hIndex}
       />
 
       <Charts
         byStatus={byStatus}
         typeBreakdown={typeBreakdown}
-        costByYear={costByYear}
-        topExpensive={topExpensive.map((g) => ({
-          name: g.name,
-          cost: g.cost ?? 0,
-          salePrice: g.salePrice,
-          status: g.status,
-        }))}
+        years={years}
+        coverage={coverage}
+        topExpensive={topExpensive}
         topSleeves={topSleeves}
       />
     </div>
@@ -206,7 +223,13 @@ function buildCostByYear(games: { purchaseDate: Date | null; cost: number | null
       byYear[y].revenue += g.salePrice ?? 0;
     }
   }
-  return Object.entries(byYear)
-    .sort(([a], [b]) => parseInt(a) - parseInt(b))
-    .map(([year, data]) => ({ year, ...data }));
+  // Tutti gli anni dell'intervallo, anche quelli senza movimenti: un anno che
+  // manca nel grafico sembra un buco nei dati invece che un anno vuoto.
+  const ys = Object.keys(byYear).map(Number);
+  if (ys.length === 0) return [];
+  const out = [];
+  for (let y = Math.min(...ys); y <= Math.max(...ys); y++) {
+    out.push({ year: String(y), ...(byYear[String(y)] ?? { purchased: 0, sold: 0, cost: 0, revenue: 0 }) });
+  }
+  return out;
 }

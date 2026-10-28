@@ -1,22 +1,16 @@
+import Link from "next/link";
+import { eur, signedEur, num, dec } from "./format";
+
 interface Props {
-  totals: {
-    all: number;
-    inCollection: number;
+  collection: {
+    total: number;       // in casa + preordinati
+    inHouse: number;     // = Collezione
     forSale: number;
     preordered: number;
     sold: number;
     wishlist: number;
-  };
-  finances: {
-    totalInvested: number;
-    collectionValue: number;
-    totalSaleRevenue: number;
-    totalProfit: number;
-    avgCost: number;
     avgRating: number | null;
-    dailySpend: number;
-    daysOwned: number;
-    startDate: string;
+    ratedCount: number;
   };
   plays: {
     hIndex: number;
@@ -24,98 +18,84 @@ interface Props {
     gamesPlayed: number;
     nextH: number;
     readyForNext: number;
+    neverPlayed: number;
+  };
+  money: {
+    totalInvested: number;
+    avgCost: number;
+    collectionValue: number;
+    totalSaleRevenue: number;
+    totalProfit: number;
+    soldCount: number;
+    dailySpend: number;
+    daysOwned: number;
+    startDate: string;
   };
 }
 
-function StatCard({ label, value, sub, accent }: {
-  label: string;
-  value: string | number;
-  sub?: string;
-  accent?: boolean;
+function StatCard({ label, value, sub, accent, color, href }: {
+  label: string; value: string; sub?: string; accent?: boolean; color?: string; href?: string;
 }) {
-  return (
-    <div className="card" style={{ borderLeft: accent ? "3px solid var(--accent-red)" : undefined }}>
-      <p className="eyebrow mb-1" style={{ color: "var(--text-secondary)" }}>
-        {label}
-      </p>
-      <p className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>
-        {value}
-      </p>
+  const body = (
+    <div className="card h-full" style={{ borderLeft: accent ? "3px solid var(--accent-red)" : undefined }}>
+      <p className="eyebrow mb-1" style={{ color: "var(--text-secondary)" }}>{label}</p>
+      <p className="text-2xl font-bold tabular-nums" style={{ color: color ?? "var(--text-primary)" }}>{value}</p>
       {sub && <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{sub}</p>}
     </div>
   );
+  // le card che hanno una pagina dedicata ci portano
+  return href ? <Link href={href} className="block hover:brightness-110 transition" style={{ textDecoration: "none" }}>{body}</Link> : body;
 }
 
-export default function StatCards({ totals, finances, plays }: Props) {
-  const profitPositive = finances.totalProfit >= 0;
-  // Per salire a H+1 servono H+1 giochi con H+1 partite: quanti ne mancano.
-  const missingForNext = Math.max(0, plays.nextH - plays.readyForNext);
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <h2 className="text-sm font-semibold" style={{ color: "var(--text-secondary)" }}>{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+export default function StatCards({ collection: c, plays: p, money: m }: Props) {
+  const missingForNext = Math.max(0, p.nextH - p.readyForNext);
 
   return (
-    <div className="space-y-4">
-      {/* Conteggi */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-        <StatCard label="Totale giochi" value={totals.all} accent />
-        <StatCard label="In Collezione" value={totals.inCollection} />
-        <StatCard label="In Vendita"    value={totals.forSale} />
-        <StatCard label="Preordinati"   value={totals.preordered} />
-        <StatCard label="Venduti"       value={totals.sold} />
-        <StatCard label="Wishlist"      value={totals.wishlist} />
-      </div>
+    <div className="space-y-8">
+      <Section title="Collezione">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
+          <StatCard label="Totale giochi" value={num(c.total)} sub="in casa + preordinati" accent />
+          <StatCard label="In casa" value={num(c.inHouse)}
+            sub={c.forSale > 0 ? `di cui ${num(c.forSale)} in vendita` : "la tua Collezione"} href="/collection" />
+          <StatCard label="Preordinati" value={num(c.preordered)} sub="in arrivo" href="/preordini" />
+          <StatCard label="Venduti" value={num(c.sold)} sub="non contano nel totale" href="/venduti" />
+          <StatCard label="Desiderata" value={num(c.wishlist)} href="/wishlist" />
+          <StatCard label="Rating medio BGG"
+            value={c.avgRating != null ? `★ ${dec(c.avgRating)}` : "—"}
+            sub={`sui ${num(c.ratedCount)} giochi in casa con rating`} />
+        </div>
+      </Section>
 
-      {/* Partite */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-        <StatCard
-          label="H-index"
-          value={plays.hIndex}
-          sub={plays.gamesPlayed === 0
-            ? "Nessuna partita registrata"
-            : `Ancora ${missingForNext} ${missingForNext === 1 ? "gioco" : "giochi"} a ${plays.nextH}+ partite per arrivare a ${plays.nextH}`}
-          accent
-        />
-        <StatCard
-          label="Partite giocate"
-          value={plays.totalPlays}
-          sub={`${plays.gamesPlayed} giochi diversi`}
-        />
-      </div>
+      <Section title="Partite">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <StatCard label="H-index" value={num(p.hIndex)} accent
+            sub={p.gamesPlayed === 0
+              ? "Nessuna partita registrata"
+              : `Ancora ${num(missingForNext)} ${missingForNext === 1 ? "gioco" : "giochi"} a ${p.nextH}+ partite per arrivare a ${p.nextH}`} />
+          <StatCard label="Partite giocate" value={num(p.totalPlays)} sub={`${num(p.gamesPlayed)} giochi diversi`} href="/plays" />
+          <StatCard label="Mai giocati" value={num(p.neverPlayed)} sub="giochi in casa senza partite" href="/mai-giocati" />
+        </div>
+      </Section>
 
-      {/* Finanze */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        <StatCard
-          label="Investimento totale"
-          value={`€${finances.totalInvested.toFixed(2)}`}
-          sub={`Media €${finances.avgCost.toFixed(2)} / gioco`}
-          accent
-        />
-        <StatCard
-          label="Valore collezione"
-          value={`€${finances.collectionValue.toFixed(2)}`}
-          sub="Costo giochi in collezione"
-        />
-        <StatCard
-          label="Ricavi vendite"
-          value={`€${finances.totalSaleRevenue.toFixed(2)}`}
-          sub={`Su ${totals.sold} giochi venduti`}
-        />
-        <StatCard
-          label="P&L vendite"
-          value={`${profitPositive ? "+" : ""}€${finances.totalProfit.toFixed(2)}`}
-          sub={profitPositive ? "In profitto" : "In perdita"}
-        />
-        {finances.avgRating != null && (
-          <StatCard
-            label="Rating medio BGG"
-            value={`★ ${finances.avgRating.toFixed(2)}`}
-            sub="Media collezione"
-          />
-        )}
-        <StatCard
-          label="Spesa media giornaliera"
-          value={`€${finances.dailySpend.toFixed(2)}`}
-          sub={`Dal ${finances.startDate} · ${finances.daysOwned} giorni`}
-        />
-      </div>
+      <Section title="Soldi">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
+          <StatCard label="Speso in tutto" value={eur(m.totalInvested)} sub={`media ${eur(m.avgCost)} a gioco`} accent />
+          <StatCard label="Valore in casa" value={eur(m.collectionValue)} sub="quanto sono costati i giochi in casa" />
+          <StatCard label="Incassato" value={eur(m.totalSaleRevenue)} sub={`da ${num(m.soldCount)} giochi venduti`} href="/venduti" />
+          <StatCard label={m.totalProfit >= 0 ? "Guadagno vendite" : "Perdita vendite"} value={signedEur(m.totalProfit)}
+            color={m.totalProfit >= 0 ? "#4ade80" : "var(--accent-red-light)"} sub="incassato meno quanto li avevi pagati" />
+          <StatCard label="Spesa al giorno" value={eur(m.dailySpend)} sub={`dal ${m.startDate} · ${num(m.daysOwned)} giorni`} />
+        </div>
+      </Section>
     </div>
   );
 }
