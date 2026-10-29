@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { prismaTx } from "@/lib/prismaTx";
 import { findBggConflict, isUniqueViolation, isNotFound } from "@/lib/dupCheck";
 import { asWinMode } from "@/lib/winner";
-import { parseDayInput } from "@/lib/dates";
+import { preorderFromBody } from "@/lib/preorderFields";
 import { expansionOfFromBody, checkExpansionOf } from "@/lib/expansion";
 import {
   clearCollectionStatusOnBgg,
@@ -97,6 +97,11 @@ export async function PUT(
     if (err) return NextResponse.json({ error: err }, { status: 400 });
   }
 
+  // Provenienza, pagato, consegna: il modulo li manda solo per i preordinati;
+  // assenti = non toccare.
+  const pre = preorderFromBody(body);
+  if ("error" in pre) return NextResponse.json({ error: pre.error }, { status: 400 });
+
   // Re-linking to a bggId already owned by another game (or on the wishlist)
   // would violate one-row-per-BGG-id — reject before writing.
   if (relinked && newBggId != null) {
@@ -131,6 +136,7 @@ export async function PUT(
         playedBefore: typeof body.playedBefore === "boolean" ? body.playedBefore : undefined,
         locationId:   "locationId" in body ? (body.locationId != null ? parseInt(body.locationId) : null) : undefined,
         expansionOfId,
+        ...pre.data,
         ...(relinked ? { bggCollId: null } : {}),
         insert:       body.insert,
         purchaseDate: body.purchaseDate   ? new Date(body.purchaseDate) : null,
@@ -206,17 +212,9 @@ export async function PATCH(
   if (typeof body?.playedBefore === "boolean") data.playedBefore = body.playedBefore;
   if ("locationId" in body)
     data.locationId = body.locationId == null ? null : parseInt(body.locationId);
-  if ("preorderSourceId" in body)
-    data.preorderSourceId = body.preorderSourceId == null ? null : parseInt(body.preorderSourceId);
-  if (typeof body?.preorderPaid === "boolean") data.preorderPaid = body.preorderPaid;
-  if ("preorderEta" in body) {
-    // Giorno di calendario a mezzanotte UTC (lib/dates). Stringa vuota = svuota.
-    const v = typeof body.preorderEta === "string" ? body.preorderEta.trim() : "";
-    // Un anno a metà (0202 mentre si digita 2026) o un giorno inesistente non sono date.
-    const d = v ? parseDayInput(v) : null;
-    if (v && !d) return NextResponse.json({ error: "Data di consegna non valida" }, { status: 400 });
-    data.preorderEta = d;
-  }
+  const pre = preorderFromBody(body);
+  if ("error" in pre) return NextResponse.json({ error: pre.error }, { status: 400 });
+  Object.assign(data, pre.data);
 
   if (Object.keys(data).length === 0)
     return NextResponse.json({ error: "nessun campo aggiornabile nel corpo" }, { status: 400 });

@@ -16,6 +16,7 @@ import { useStatuses } from "@/components/StatusProvider";
 import { GAME_TYPES, INSERT_OPTIONS } from "@/lib/types";
 import { WIN_MODES, asWinMode } from "@/lib/winner";
 import BaseGamePicker, { type BaseGame } from "@/components/BaseGamePicker";
+import SourceSelect, { type Source } from "@/components/PreorderSourceSelect";
 
 type Mode = "collection" | "wishlist";
 
@@ -80,6 +81,19 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
   const [valueRange, setValueRange]     = useState(String(initialData?.valueRange ?? ""));
   const [desirability, setDesirability] = useState(String(initialData?.desirability ?? "3"));
   const [notes, setNotes]               = useState(String(initialData?.notes ?? ""));
+  // Preordine: gli stessi campi della pagina Preordini, qui solo con stato Preordinato.
+  const [preorderSourceId, setPreorderSourceId] = useState<number | null>(
+    initialData?.preorderSourceId != null ? Number(initialData.preorderSourceId) : null
+  );
+  const [preorderPaid, setPreorderPaid] = useState(initialData?.preorderPaid === true);
+  const [preorderEta, setPreorderEta]   = useState(dayInput(initialData?.preorderEta));
+  const [sources, setSources]           = useState<Source[] | null>(null);
+  // Le provenienze si caricano solo quando servono.
+  useEffect(() => {
+    if (status !== "Preordinato" || sources) return;
+    apiFetch<{ sources: Source[] }>("/api/preorder-sources")
+      .then((r) => setSources(r.ok && r.data ? r.data.sources : []));
+  }, [status, sources]);
 
   // Bustine normalizzate
   function extractSleevesFromInitial(data: any): { sleeveId: number; qty: number }[] {
@@ -211,6 +225,13 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
       payload.salePrice    = salePrice || null;
       payload.purchaseDate = purchaseDate || null;
       payload.saleDate     = status === "Venduto" ? (saleDate || null) : null;
+      // Solo per i preordinati: per gli altri stati i campi restano come sono
+      // (un gioco arrivato tiene la sua provenienza).
+      if (status === "Preordinato") {
+        payload.preorderSourceId = preorderSourceId;
+        payload.preorderPaid     = preorderPaid;
+        payload.preorderEta      = preorderEta || null;
+      }
       payload.sleeves      = sleevesData;
     }
 
@@ -248,7 +269,7 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
           const detail = items.map(i => `${i.label || i.size}: servono ${i.requested}, disponibili ${i.available}`).join("; ");
           show(`Magazzino bustine insufficiente. ${detail}. Rifornisci dalla pagina Bustine.`, "error");
         } else {
-          show("Errore durante il salvataggio", "error");
+          show(res.data?.error ?? "Errore durante il salvataggio", "error");
         }
         return;
       }
@@ -506,6 +527,28 @@ export default function GameForm({ mode, initialData, id, returnUrl }: Props) {
                   <Label>Data vendita</Label>
                   <DateInput value={saleDate} onChange={setSaleDate} className="w-full" />
                 </div>
+              )}
+              {status === "Preordinato" && (
+                <>
+                  <div className="sm:col-span-2">
+                    <Label>Provenienza</Label>
+                    {sources
+                      ? <SourceSelect value={preorderSourceId} sources={sources} onChange={setPreorderSourceId}
+                          onCreated={(s) => setSources((prev) => (prev ?? []).some((x) => x.id === s.id) ? prev
+                            : [...(prev ?? []), s].sort((a, b) => a.name.localeCompare(b.name)))} />
+                      : <p className="text-xs py-2" style={{ color: "var(--text-muted)" }}>Caricamento…</p>}
+                  </div>
+                  <div>
+                    <Label>Consegna prevista</Label>
+                    <DateInput value={preorderEta} onChange={setPreorderEta} className="w-full" />
+                  </div>
+                  <div className="flex items-end pb-2">
+                    <label className="flex items-center gap-2 cursor-pointer text-sm" style={{ color: "var(--text-secondary)" }}>
+                      <input type="checkbox" checked={preorderPaid} onChange={(e) => setPreorderPaid(e.target.checked)} />
+                      Già pagato
+                    </label>
+                  </div>
+                </>
               )}
             </>
           )}

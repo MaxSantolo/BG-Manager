@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { prismaTx } from "@/lib/prismaTx";
 import { getBggGame } from "@/lib/bgg";
 import { expansionOfFromBody, checkExpansionOf, EXPANSION_TYPE } from "@/lib/expansion";
+import { preorderFromBody } from "@/lib/preorderFields";
 import { findBggConflict, isUniqueViolation } from "@/lib/dupCheck";
 import { ensureCollectionItemOnBgg, withBggTimeout, bggPushResult } from "@/lib/bggWrite";
 
@@ -80,6 +81,10 @@ export async function POST(request: NextRequest) {
     if (err) return NextResponse.json({ error: err }, { status: 400 });
   }
 
+  // Provenienza, pagato, consegna: dal modulo quando il gioco nasce preordinato.
+  const pre = preorderFromBody(body);
+  if ("error" in pre) return NextResponse.json({ error: pre.error }, { status: 400 });
+
   // If bggId provided and no thumbnail yet, auto-fetch from BGG
   let bggData = null;
   if (body.bggId && !body.thumbnail) {
@@ -108,6 +113,7 @@ export async function POST(request: NextRequest) {
         playedBefore: body.playedBefore === true,
         locationId:   body.locationId != null ? parseInt(body.locationId) : null,
         expansionOfId: expansionOfId ?? null,
+        ...pre.data,
         insert:       body.insert          || "No",
         purchaseDate: body.purchaseDate    ? new Date(body.purchaseDate) : null,
         // Data di vendita solo se il gioco nasce venduto.
