@@ -5,6 +5,7 @@ import { findNeverPlayed } from "@/lib/neverPlayed";
 import StatCards from "./StatCards";
 import Charts from "./Charts";
 import CostPerPlay from "./CostPerPlay";
+import Taste from "./Taste";
 import { EXPANSION_TYPE } from "@/lib/expansion";
 
 export const dynamic = "force-dynamic";
@@ -69,7 +70,9 @@ export default async function StatisticsPage() {
 
   const playCounts = playCountsByGame(plays, allGames);
   const hIndex = buildHIndex(playCounts);
-  const costPerPlay = buildCostPerPlay(inHouse, playCounts, new Set(neverPlayed.map((g) => g.id)));
+  const neverIds = new Set(neverPlayed.map((g) => g.id));
+  const costPerPlay = buildCostPerPlay(inHouse, playCounts, neverIds);
+  const taste = buildTaste(inHouse, neverIds);
 
   const typeBreakdown = inHouse.reduce(
     (acc, g) => { acc[g.type] = (acc[g.type] ?? 0) + 1; return acc; },
@@ -157,6 +160,8 @@ export default async function StatisticsPage() {
       />
 
       <CostPerPlay {...costPerPlay} />
+
+      <Taste {...taste} />
 
       <Charts
         byStatus={byStatus}
@@ -248,6 +253,47 @@ function buildCostPerPlay(
     unplayedSpend: round2(unplayed.reduce((s, g) => s + g.cost, 0)),
     avgPerPlay: playedPlays > 0 ? round2(playedCost / playedPlays) : null,
     playedCount: played.length,
+  };
+}
+
+/**
+ * Il tuo gusto: peso e voto BGG dei giochi in casa (espansioni escluse), giocati
+ * o mai giocati come nella pagina Mai giocati, e le meccaniche che ricorrono.
+ * Peso o voto 0 per BGG significa "nessun dato": quei giochi stanno fuori dal
+ * grafico ma contano nelle meccaniche.
+ */
+function buildTaste(
+  inHouse: { id: number; name: string; type: string; bggWeight: number | null; bggRating: number | null; mechanics: string | null }[],
+  neverIds: Set<number>,
+) {
+  const base = inHouse.filter((g) => g.type !== EXPANSION_TYPE);
+  const points = base
+    .filter((g) => (g.bggWeight ?? 0) > 0 && (g.bggRating ?? 0) > 0)
+    .map((g) => ({ id: g.id, name: g.name, weight: round2(g.bggWeight!), rating: round2(g.bggRating!), played: !neverIds.has(g.id) }));
+  const avg = (xs: typeof points, f: (p: (typeof points)[number]) => number) =>
+    xs.length ? round2(xs.reduce((s, p) => s + f(p), 0) / xs.length) : null;
+  const centre = (xs: typeof points) => ({ count: xs.length, weight: avg(xs, (p) => p.weight), rating: avg(xs, (p) => p.rating) });
+
+  const mech = new Map<string, { games: number; played: number }>();
+  for (const g of base) {
+    let list: unknown = [];
+    try { list = JSON.parse(g.mechanics ?? "[]"); } catch { /* meccaniche illeggibili: nessuna */ }
+    if (!Array.isArray(list)) continue;
+    for (const m of new Set(list.filter((x): x is string => typeof x === "string"))) {
+      const e = mech.get(m) ?? { games: 0, played: 0 };
+      e.games++; if (!neverIds.has(g.id)) e.played++;
+      mech.set(m, e);
+    }
+  }
+  const mechanics = [...mech].map(([name, e]) => ({ name, ...e }))
+    .sort((a, b) => b.games - a.games || a.name.localeCompare(b.name)).slice(0, 12);
+
+  return {
+    points,
+    played: centre(points.filter((p) => p.played)),
+    unplayed: centre(points.filter((p) => !p.played)),
+    mechanics,
+    baseCount: base.length,
   };
 }
 
