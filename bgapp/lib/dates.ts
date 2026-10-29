@@ -61,3 +61,17 @@ export function formatDayNum(val: Date | string): string {
     day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC",
   }).format(d);
 }
+
+/**
+ * "AAAA-MM-GG" da un input → il giorno a mezzanotte UTC, o null se non è un
+ * giorno vero. Controlla la forma, l'anno (un "0202" a metà digitazione non è
+ * una data) e che il giorno esista: "2024-13-45" ha la forma giusta ma diventa
+ * una Date non valida, e Prisma la rifiuta con un 500 invece di un 400.
+ */
+export function parseDayInput(v: string, minYear = 2000, maxYear = 2100): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+  const year = Number(v.slice(0, 4));
+  if (year < minYear || year > maxYear) return null;
+  const d = new Date(`${v}T00:00:00.000Z`);
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v ? d : null;
+}

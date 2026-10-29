@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { prismaTx } from "@/lib/prismaTx";
 import { findBggConflict, isUniqueViolation, isNotFound } from "@/lib/dupCheck";
 import { asWinMode } from "@/lib/winner";
+import { parseDayInput } from "@/lib/dates";
 import { expansionOfFromBody, checkExpansionOf } from "@/lib/expansion";
 import {
   clearCollectionStatusOnBgg,
@@ -211,13 +212,10 @@ export async function PATCH(
   if ("preorderEta" in body) {
     // Giorno di calendario a mezzanotte UTC (lib/dates). Stringa vuota = svuota.
     const v = typeof body.preorderEta === "string" ? body.preorderEta.trim() : "";
-    if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v))
-      return NextResponse.json({ error: "Data di consegna non valida" }, { status: 400 });
-    // Un anno a metà (0202 mentre si digita 2026) non è una data: si rifiuta.
-    const year = v ? Number(v.slice(0, 4)) : 0;
-    if (v && (year < 2000 || year > 2100))
-      return NextResponse.json({ error: "Anno di consegna non valido" }, { status: 400 });
-    data.preorderEta = v ? new Date(`${v}T00:00:00.000Z`) : null;
+    // Un anno a metà (0202 mentre si digita 2026) o un giorno inesistente non sono date.
+    const d = v ? parseDayInput(v) : null;
+    if (v && !d) return NextResponse.json({ error: "Data di consegna non valida" }, { status: 400 });
+    data.preorderEta = d;
   }
 
   if (Object.keys(data).length === 0)
