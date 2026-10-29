@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { APP_TZ, todayInput } from "@/lib/dates";
+import { APP_TZ, parseDayInput, todayInput } from "@/lib/dates";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
@@ -53,7 +53,9 @@ export default async function WishlistDetailPage({
           status,
           insert:        game!.insert,
           cost:          cost ? parseFloat(cost) : null,
-          purchaseDate:  purchaseDate ? new Date(purchaseDate) : new Date(),
+          // Un giorno a mezzanotte UTC (lib/dates), non "adesso" con l'ora: dopo la
+          // mezzanotte di Roma sarebbe ancora ieri in UTC.
+          purchaseDate:  parseDayInput(purchaseDate ?? "", 1900) ?? new Date(`${todayInput(APP_TZ)}T00:00:00.000Z`),
           thumbnail:     game!.thumbnail,
           image:         game!.image,
           description:   game!.description,

@@ -4,6 +4,7 @@ import { prismaTx } from "@/lib/prismaTx";
 import { getBggGame } from "@/lib/bgg";
 import { expansionOfFromBody, checkExpansionOf, EXPANSION_TYPE } from "@/lib/expansion";
 import { preorderFromBody } from "@/lib/preorderFields";
+import { parseDayInput } from "@/lib/dates";
 import { findBggConflict, isUniqueViolation } from "@/lib/dupCheck";
 import { ensureCollectionItemOnBgg, withBggTimeout, bggPushResult } from "@/lib/bggWrite";
 
@@ -81,6 +82,13 @@ export async function POST(request: NextRequest) {
     if (err) return NextResponse.json({ error: err }, { status: 400 });
   }
 
+  // Date di acquisto e vendita: "AAAA-MM-GG" (giorno a mezzanotte UTC, lib/dates).
+  // Un giorno inesistente diventava una Date non valida e Prisma rispondeva 500.
+  const purchaseDate = body.purchaseDate ? parseDayInput(String(body.purchaseDate), 1900) : null;
+  if (body.purchaseDate && !purchaseDate) return NextResponse.json({ error: "Data di acquisto non valida" }, { status: 400 });
+  const saleDate = body.saleDate ? parseDayInput(String(body.saleDate), 1900) : null;
+  if (body.saleDate && !saleDate) return NextResponse.json({ error: "Data di vendita non valida" }, { status: 400 });
+
   // Provenienza, pagato, consegna: dal modulo quando il gioco nasce preordinato.
   const pre = preorderFromBody(body);
   if ("error" in pre) return NextResponse.json({ error: pre.error }, { status: 400 });
@@ -115,10 +123,9 @@ export async function POST(request: NextRequest) {
         expansionOfId: expansionOfId ?? null,
         ...pre.data,
         insert:       body.insert          || "No",
-        purchaseDate: body.purchaseDate    ? new Date(body.purchaseDate) : null,
+        purchaseDate,
         // Data di vendita solo se il gioco nasce venduto.
-        saleDate:     (body.status || "InCollezione") === "Venduto" && body.saleDate
-                        ? new Date(body.saleDate) : null,
+        saleDate:     (body.status || "InCollezione") === "Venduto" ? saleDate : null,
         thumbnail:    bggData?.thumbnail   || body.thumbnail   || null,
         image:        bggData?.image       || body.image       || null,
         description:  bggData?.description || body.description || null,

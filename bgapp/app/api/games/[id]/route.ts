@@ -4,6 +4,7 @@ import { prismaTx } from "@/lib/prismaTx";
 import { findBggConflict, isUniqueViolation, isNotFound } from "@/lib/dupCheck";
 import { asWinMode } from "@/lib/winner";
 import { preorderFromBody } from "@/lib/preorderFields";
+import { parseDayInput } from "@/lib/dates";
 import { expansionOfFromBody, checkExpansionOf } from "@/lib/expansion";
 import {
   clearCollectionStatusOnBgg,
@@ -97,6 +98,13 @@ export async function PUT(
     if (err) return NextResponse.json({ error: err }, { status: 400 });
   }
 
+  // Date di acquisto e vendita: "AAAA-MM-GG" (giorno a mezzanotte UTC, lib/dates).
+  // Un giorno inesistente diventava una Date non valida e Prisma rispondeva 500.
+  const purchaseDate = body.purchaseDate ? parseDayInput(String(body.purchaseDate), 1900) : null;
+  if (body.purchaseDate && !purchaseDate) return NextResponse.json({ error: "Data di acquisto non valida" }, { status: 400 });
+  const saleDateParsed = body.saleDate ? parseDayInput(String(body.saleDate), 1900) : null;
+  if (body.saleDate && !saleDateParsed) return NextResponse.json({ error: "Data di vendita non valida" }, { status: 400 });
+
   // Provenienza, pagato, consegna: il modulo li manda solo per i preordinati;
   // assenti = non toccare.
   const pre = preorderFromBody(body);
@@ -139,11 +147,10 @@ export async function PUT(
         ...pre.data,
         ...(relinked ? { bggCollId: null } : {}),
         insert:       body.insert,
-        purchaseDate: body.purchaseDate   ? new Date(body.purchaseDate) : null,
+        purchaseDate,
         // Data di vendita solo sui venduti (stato finale, dopo la regola del
         // prezzo). Senza stato nel corpo il comportamento resta quello di prima.
-        saleDate:     (resolvedStatus === undefined || resolvedStatus === "Venduto") && body.saleDate
-                        ? new Date(body.saleDate) : null,
+        saleDate:     resolvedStatus === undefined || resolvedStatus === "Venduto" ? saleDateParsed : null,
         thumbnail:    body.thumbnail      ?? null,
         image:        body.image          ?? null,
         description:  body.description    ?? null,
