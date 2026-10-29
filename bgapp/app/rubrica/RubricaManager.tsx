@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Trash2, Check, X, Loader2, MapPin, Merge, Archive, Plus } from "lucide-react";
+import { Pencil, Trash2, Check, X, Loader2, MapPin, Merge, Archive, Plus, Truck, type LucideIcon } from "lucide-react";
 import { Avatar } from "@/components/PlayerPicker";
 import { apiFetch } from "@/lib/fetchClient";
 
@@ -11,36 +11,16 @@ interface Player {
 interface Place {
   id: number; name: string; imageUrl: string | null; playCount: number;
 }
-interface Location {
+/** Una voce con un nome e i giochi che la usano: posizioni delle scatole, provenienze dei preordini. */
+interface Named {
   id: number; name: string; gameCount: number;
 }
 
 export default function RubricaManager({
-  initialPlayers, initialPlaces, initialLocations,
-}: { initialPlayers: Player[]; initialPlaces: Place[]; initialLocations: Location[] }) {
+  initialPlayers, initialPlaces, initialLocations, initialSources,
+}: { initialPlayers: Player[]; initialPlaces: Place[]; initialLocations: Named[]; initialSources: Named[] }) {
   const [players, setPlayers] = useState(initialPlayers);
   const [places, setPlaces]   = useState(initialPlaces);
-  const [locations, setLocations] = useState(initialLocations);
-  const [newLocation, setNewLocation] = useState("");
-  const [addingLocation, setAddingLocation] = useState(false);
-
-  async function createLocation() {
-    const name = newLocation.trim();
-    if (!name) return;
-    setAddingLocation(true);
-    const res = await apiFetch<Location & { error?: string }>("/api/locations", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    setAddingLocation(false);
-    if (!res.ok || !res.data?.id) return;
-    const created = res.data;
-    setLocations(ls => ls.some(l => l.id === created.id)
-      ? ls
-      : [...ls, { id: created.id, name: created.name, gameCount: created.gameCount ?? 0 }]
-          .sort((a, b) => a.name.localeCompare(b.name)));
-    setNewLocation("");
-  }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -53,7 +33,12 @@ export default function RubricaManager({
           <PlayerRow key={p.id} player={p} allPlayers={players}
             onChange={u => setPlayers(ps => ps.map(x => x.id === u.id ? u : x))}
             onDelete={id => setPlayers(ps => ps.filter(x => x.id !== id))}
-            onMerged={(removedId) => setPlayers(ps => ps.filter(x => x.id !== removedId))} />
+            onMerged={(removedId, merged) => setPlayers(ps => ps
+              .filter(x => x.id !== removedId)
+              // Il giocatore che resta ha ora le partite di entrambi i nomi (e magari l'account BGG dell'altro).
+              .map(x => merged && x.id === merged.id
+                ? { ...x, playCount: merged.playCount, bggUsername: merged.bggUsername, avatarUrl: merged.avatarUrl }
+                : x))} />
         ))}
       </section>
 
@@ -69,30 +54,13 @@ export default function RubricaManager({
         ))}
       </section>
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold" style={{ color: "var(--text-secondary)" }}>
-          Posizioni ({locations.length})
-        </h2>
-        <div className="card flex items-center gap-2">
-          <input type="text" value={newLocation} onChange={e => setNewLocation(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); createLocation(); } }}
-            placeholder="es. Scaffale salotto, ripiano 2" className="w-full text-sm" />
-          <button type="button" onClick={createLocation} disabled={addingLocation || !newLocation.trim()}
-            className="btn-primary text-sm flex-shrink-0">
-            {addingLocation ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Aggiungi
-          </button>
-        </div>
-        {locations.length === 0 && (
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            Nessuna posizione. Puoi crearle anche dalla scheda di un gioco.
-          </p>
-        )}
-        {locations.map(l => (
-          <LocationRow key={l.id} location={l}
-            onChange={u => setLocations(ls => ls.map(x => x.id === u.id ? { ...x, ...u } : x))}
-            onDelete={id => setLocations(ls => ls.filter(x => x.id !== id))} />
-        ))}
-      </section>
+      <NamedSection title="Posizioni" api="/api/locations" Icon={Archive} initial={initialLocations}
+        placeholder="es. Scaffale salotto, ripiano 2" orphan="senza posizione"
+        empty="Nessuna posizione. Puoi crearle anche dalla scheda di un gioco." />
+
+      <NamedSection title="Provenienze dei preordini" api="/api/preorder-sources" Icon={Truck} initial={initialSources}
+        placeholder="es. Kickstarter" orphan="senza provenienza"
+        empty="Nessuna provenienza. Puoi crearle anche dalla pagina Preordini o dalla scheda di un gioco." />
     </div>
   );
 }
@@ -109,7 +77,7 @@ function Field({ label, ...props }: { label: string } & React.InputHTMLAttribute
 
 function PlayerRow({ player, allPlayers, onChange, onDelete, onMerged }: {
   player: Player; allPlayers: Player[];
-  onChange: (p: Player) => void; onDelete: (id: number) => void; onMerged: (removedId: number) => void;
+  onChange: (p: Player) => void; onDelete: (id: number) => void; onMerged: (removedId: number, merged?: Player) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName]       = useState(player.name);
@@ -143,13 +111,13 @@ function PlayerRow({ player, allPlayers, onChange, onDelete, onMerged }: {
     const target = allPlayers.find(p => p.id === intoId);
     if (!target || !confirm(`Unire "${player.name}" in "${target.name}"? "${player.name}" sparirà.`)) return;
     setBusy(true); setErr(null);
-    const res = await apiFetch<{ error?: string }>(`/api/players/merge`, {
+    const res = await apiFetch<{ error?: string; player?: Player }>(`/api/players/merge`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ fromId: player.id, intoId }),
     });
     setBusy(false);
     if (!res.ok || res.data?.error) { setErr(res.data?.error ?? "Unione non riuscita."); return; }
-    onMerged(player.id);
+    onMerged(player.id, res.data?.player);
   }
 
   return (
@@ -284,38 +252,95 @@ function PlaceRow({ place, onChange, onDelete }: {
   );
 }
 
-function LocationRow({ location, onChange, onDelete }: {
-  location: Location; onChange: (l: Location) => void; onDelete: (id: number) => void;
+function NamedSection({ title, api, Icon, initial, placeholder, orphan, empty }: {
+  title: string; api: string; Icon: LucideIcon; initial: Named[];
+  placeholder: string; orphan: string; empty: string;
+}) {
+  const [items, setItems] = useState(initial);
+  const [draft, setDraft] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function create() {
+    const name = draft.trim();
+    if (!name) return;
+    setAdding(true); setErr(null);
+    const res = await apiFetch<Named & { error?: string }>(api, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    setAdding(false);
+    if (res.timedOut || res.networkError) { setErr("Connessione assente. Riprova."); return; }
+    if (!res.ok || !res.data?.id) { setErr(res.data?.error ?? "Non è stato possibile aggiungerla."); return; }
+    const created = res.data;
+    // Un nome già presente torna come la voce esistente: niente doppioni in elenco.
+    setItems(xs => xs.some(x => x.id === created.id)
+      ? xs
+      : [...xs, { id: created.id, name: created.name, gameCount: created.gameCount ?? 0 }]
+          .sort((a, b) => a.name.localeCompare(b.name)));
+    setDraft("");
+  }
+
+  return (
+    <section className="space-y-3">
+      <h2 className="text-sm font-semibold" style={{ color: "var(--text-secondary)" }}>
+        {title} ({items.length})
+      </h2>
+      <div className="card space-y-2">
+        <div className="flex items-center gap-2">
+          <input type="text" value={draft} onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); create(); } }}
+            placeholder={placeholder} className="w-full text-sm" aria-label={`Nuova voce: ${title}`} />
+          <button type="button" onClick={create} disabled={adding || !draft.trim()}
+            className="btn-primary text-sm flex-shrink-0">
+            {adding ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Aggiungi
+          </button>
+        </div>
+        {err && <p className="text-xs" style={{ color: "var(--accent-red-light)" }}>{err}</p>}
+      </div>
+      {items.length === 0 && <p className="text-sm" style={{ color: "var(--text-muted)" }}>{empty}</p>}
+      {items.map(x => (
+        <NamedRow key={x.id} item={x} api={api} Icon={Icon} orphan={orphan}
+          onChange={u => setItems(xs => xs.map(y => y.id === u.id ? { ...y, ...u } : y))}
+          onDelete={id => setItems(xs => xs.filter(y => y.id !== id))} />
+      ))}
+    </section>
+  );
+}
+
+function NamedRow({ item, api, Icon, orphan, onChange, onDelete }: {
+  item: Named; api: string; Icon: LucideIcon; orphan: string;
+  onChange: (x: Named) => void; onDelete: (id: number) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [name, setName]       = useState(location.name);
+  const [name, setName]       = useState(item.name);
   const [busy, setBusy]       = useState(false);
   const [err, setErr]         = useState<string | null>(null);
 
   async function save() {
     if (!name.trim()) { setErr("Nome richiesto"); return; }
     setBusy(true); setErr(null);
-    const res = await apiFetch<Location & { error?: string }>(`/api/locations/${location.id}`, {
+    const res = await apiFetch<Named & { error?: string }>(`${api}/${item.id}`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
     });
     setBusy(false);
     if (res.timedOut || res.networkError) { setErr("Connessione assente. Riprova."); return; }
     if (!res.ok || !res.data || res.data.error) { setErr(res.data?.error ?? "Errore"); return; }
-    onChange({ ...location, name: res.data.name });
+    onChange({ ...item, name: res.data.name });
     setEditing(false);
   }
 
   async function remove() {
-    const n = location.gameCount;
+    const n = item.gameCount;
     const warn = n > 0
-      ? `Eliminare "${location.name}"? ${n} ${n === 1 ? "gioco resterà" : "giochi resteranno"} senza posizione.`
-      : `Eliminare "${location.name}"?`;
+      ? `Eliminare "${item.name}"? ${n} ${n === 1 ? "gioco resterà" : "giochi resteranno"} ${orphan}.`
+      : `Eliminare "${item.name}"?`;
     if (!confirm(warn)) return;
     setBusy(true);
-    const res = await apiFetch(`/api/locations/${location.id}`, { method: "DELETE" });
+    const res = await apiFetch(`${api}/${item.id}`, { method: "DELETE" });
     setBusy(false);
-    if (res.ok) onDelete(location.id); else setErr("Eliminazione non riuscita.");
+    if (res.ok) onDelete(item.id); else setErr("Eliminazione non riuscita.");
   }
 
   return (
@@ -323,12 +348,12 @@ function LocationRow({ location, onChange, onDelete }: {
       <div className="flex items-center gap-3">
         <div className="w-[34px] h-[34px] rounded flex items-center justify-center flex-shrink-0"
           style={{ backgroundColor: "var(--bg-elevated)" }}>
-          <Archive size={16} style={{ color: "var(--text-muted)" }} />
+          <Icon size={16} style={{ color: "var(--text-muted)" }} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{location.name}</p>
+          <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{item.name}</p>
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            {location.gameCount} {location.gameCount === 1 ? "gioco" : "giochi"}
+            {item.gameCount} {item.gameCount === 1 ? "gioco" : "giochi"}
           </p>
         </div>
         {!editing && (
@@ -351,7 +376,7 @@ function LocationRow({ location, onChange, onDelete }: {
             <button type="button" onClick={save} disabled={busy} className="btn-primary text-sm flex items-center gap-1.5">
               {busy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Salva
             </button>
-            <button type="button" onClick={() => { setEditing(false); setName(location.name); setErr(null); }}
+            <button type="button" onClick={() => { setEditing(false); setName(item.name); setErr(null); }}
               className="btn-secondary text-sm flex items-center gap-1.5"><X size={13} /> Annulla</button>
           </div>
         </div>

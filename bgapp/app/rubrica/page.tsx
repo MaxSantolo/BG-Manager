@@ -5,7 +5,7 @@ import RubricaManager from "./RubricaManager";
 export const dynamic = "force-dynamic";
 
 export default async function RubricaPage() {
-  const [players, places, locations] = await Promise.all([
+  const [players, places, locations, sources] = await Promise.all([
     prisma.player.findMany({
       orderBy: [{ playCount: "desc" }, { name: "asc" }],
       select: { id: true, name: true, bggUsername: true, avatarUrl: true, playCount: true },
@@ -15,6 +15,10 @@ export default async function RubricaPage() {
       select: { id: true, name: true, imageUrl: true, playCount: true },
     }),
     prisma.location.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, _count: { select: { games: true } } },
+    }),
+    prisma.preorderSource.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true, _count: { select: { games: true } } },
     }),
@@ -28,11 +32,12 @@ export default async function RubricaPage() {
           <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>Rubrica</h1>
         </div>
         <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-          Giocatori, luoghi delle partite e posizioni in cui tieni le scatole.
+          Giocatori, luoghi delle partite, posizioni in cui tieni le scatole e provenienze dei preordini.
         </p>
       </div>
       <RubricaManager initialPlayers={players} initialPlaces={places}
-        initialLocations={locations.map(l => ({ id: l.id, name: l.name, gameCount: l._count.games }))} />
+        initialLocations={locations.map(l => ({ id: l.id, name: l.name, gameCount: l._count.games }))}
+        initialSources={sources.map(s => ({ id: s.id, name: s.name, gameCount: s._count.games }))} />
     </div>
   );
 }
