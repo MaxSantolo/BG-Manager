@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/prisma";
-import { formatDayNum } from "@/lib/dates";
+import { APP_TZ, formatDayNum, todayInput } from "@/lib/dates";
 import { parseStatusConfig, labelFor, OUT_OF_COLLECTION } from "@/lib/status";
 import { findNeverPlayed } from "@/lib/neverPlayed";
 import StatCards from "./StatCards";
 import Charts from "./Charts";
+import CostPerPlay from "./CostPerPlay";
+import { EXPANSION_TYPE } from "@/lib/expansion";
 
 export const dynamic = "force-dynamic";
 
@@ -61,10 +63,13 @@ export default async function StatisticsPage() {
   // la media non deve mai cominciare dopo un acquisto vero.
   const datedTimes = bought.filter((g) => g.purchaseDate).map((g) => new Date(g.purchaseDate!).getTime());
   const collectionStart = new Date(Math.min(COLLECTION_START.getTime(), ...datedTimes));
-  const daysOwned       = Math.max(1, Math.floor((Date.now() - collectionStart.getTime()) / 86_400_000));
+  // "Oggi" è il giorno di Roma (lib/dates), non l'orologio del server.
+  const daysOwned       = Math.max(1, Math.floor((Date.parse(todayInput(APP_TZ)) - collectionStart.getTime()) / 86_400_000));
   const dailySpend      = totalInvested / daysOwned;
 
-  const hIndex = buildHIndex(plays, allGames);
+  const playCounts = playCountsByGame(plays, allGames);
+  const hIndex = buildHIndex(playCounts);
+  const costPerPlay = buildCostPerPlay(inHouse, playCounts, new Set(neverPlayed.map((g) => g.id)));
 
   const typeBreakdown = inHouse.reduce(
     (acc, g) => { acc[g.type] = (acc[g.type] ?? 0) + 1; return acc; },
@@ -151,6 +156,8 @@ export default async function StatisticsPage() {
         }}
       />
 
+      <CostPerPlay {...costPerPlay} />
+
       <Charts
         byStatus={byStatus}
         typeBreakdown={typeBreakdown}
@@ -180,10 +187,10 @@ function round2(n: number) {
  *    giochi diversi spezzerebbe in due lo storico di un gioco e abbasserebbe
  *    l'indice, quindi bggGameId viene ricondotto al gioco locale quando esiste.
  */
-function buildHIndex(
-  plays: { gameId: number | null; bggGameId: number | null; gameName: string; quantity: number }[],
-  games: { id: number; bggId: number | null }[],
-) {
+type PlayRow = { gameId: number | null; bggGameId: number | null; gameName: string; quantity: number };
+
+/** Partite per gioco: chiave "g:<id locale>" quando si risale al gioco, altrimenti bggId o nome. */
+function playCountsByGame(plays: PlayRow[], games: { id: number; bggId: number | null }[]) {
   const gameIdByBggId = new Map<number, number>();
   for (const g of games) if (g.bggId != null) gameIdByBggId.set(g.bggId, g.id);
 
@@ -195,7 +202,10 @@ function buildHIndex(
       `n:${p.gameName.trim().toLowerCase()}`;
     countByGame.set(key, (countByGame.get(key) ?? 0) + Math.max(1, p.quantity));
   }
+  return countByGame;
+}
 
+function buildHIndex(countByGame: Map<string, number>) {
   const counts = [...countByGame.values()].sort((a, b) => b - a);
   let h = 0;
   while (h < counts.length && counts[h] >= h + 1) h++;
@@ -209,6 +219,35 @@ function buildHIndex(
     gamesPlayed: counts.length,
     nextH: h + 1,
     readyForNext,
+  };
+}
+
+/**
+ * Quanto è costata ogni partita: prezzo diviso partite fatte. Solo giochi in
+ * casa con un prezzo, e niente espansioni: si giocano dentro il gioco base, qui
+ * risulterebbero tutte "mai aperte". I mai giocati sono quelli della pagina Mai
+ * giocati (stessa funzione), così i due elenchi non si contraddicono.
+ */
+function buildCostPerPlay(
+  inHouse: { id: number; name: string; type: string; cost: number | null; thumbnail: string | null }[],
+  playCounts: Map<string, number>,
+  neverIds: Set<number>,
+) {
+  const paid = inHouse.filter((g) => (g.cost ?? 0) > 0 && g.type !== EXPANSION_TYPE);
+  const item = (g: (typeof paid)[number], plays: number) =>
+    ({ id: g.id, name: g.name, thumbnail: g.thumbnail, cost: g.cost!, plays, perPlay: plays > 0 ? round2(g.cost! / plays) : null });
+  const played = paid.map((g) => item(g, playCounts.get(`g:${g.id}`) ?? 0)).filter((g) => g.plays > 0);
+  const unplayed = paid.filter((g) => neverIds.has(g.id)).map((g) => item(g, 0)).sort((a, b) => b.cost - a.cost);
+  const playedCost = played.reduce((s, g) => s + g.cost, 0);
+  const playedPlays = played.reduce((s, g) => s + g.plays, 0);
+  return {
+    best:  [...played].sort((a, b) => a.perPlay! - b.perPlay! || b.plays - a.plays).slice(0, 8),
+    worst: [...played].sort((a, b) => b.perPlay! - a.perPlay! || b.cost - a.cost).slice(0, 8),
+    unplayed: unplayed.slice(0, 8),
+    unplayedCount: unplayed.length,
+    unplayedSpend: round2(unplayed.reduce((s, g) => s + g.cost, 0)),
+    avgPerPlay: playedPlays > 0 ? round2(playedCost / playedPlays) : null,
+    playedCount: played.length,
   };
 }
 
