@@ -227,4 +227,8 @@ model Settings {
   /// JSON array of status definitions (label/color/BGG-flag mapping). Null = use
   /// the built-in defaults from lib/status.ts. See StatusDef there.
   statusConfig    String?
+  /// Inizio della collezione (giorno a mezzanotte UTC, vedi lib/dates). Le
+  /// Statistiche ci contano la spesa al giorno e ci mettono gli acquisti senza
+  /// data. Null = dal primo acquisto datato.
+  collectionStart DateTime?
 }
