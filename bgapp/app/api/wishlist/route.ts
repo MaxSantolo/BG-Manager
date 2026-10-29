@@ -41,8 +41,6 @@ export async function POST(request: NextRequest) {
       desirability: body.desirability ? parseInt(body.desirability) : 3,
       status: body.status || null,
       insert: body.insert || "No",
-      sleeves: body.sleeves || "No",
-      sleeveData: body.sleeveData || "[]",
       thumbnail: body.thumbnail || null,
       image: body.image || null,
       description: body.description || null,

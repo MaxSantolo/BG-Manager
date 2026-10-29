@@ -43,8 +43,6 @@ model Game {
   /// coop (shared win/loss), manual (tick winners by hand). See lib/winner.ts.
   winMode       String    @default("high")
   insert        String    @default("No")
-  sleeves       String    @default("No")
-  sleeveData    String    @default("[]") // TODO: remove after migrazione dati
   purchaseDate  DateTime?
   saleDate      DateTime?
   thumbnail     String?
@@ -84,8 +82,6 @@ model WishlistGame {
   desirability  Int      @default(3)
   status        String?
   insert        String   @default("No")
-  sleeves       String   @default("No")
-  sleeveData    String   @default("[]")
   thumbnail     String?
   image         String?
   description   String?

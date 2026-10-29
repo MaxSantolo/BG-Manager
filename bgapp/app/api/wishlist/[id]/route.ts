@@ -37,8 +37,6 @@ export async function PUT(
       desirability: body.desirability ? parseInt(body.desirability) : 3,
       status: body.status ?? null,
       insert: body.insert,
-      sleeves: body.sleeves,
-      sleeveData: body.sleeveData ?? "[]",
       thumbnail: body.thumbnail ?? null,
       image: body.image ?? null,
       description: body.description ?? null,
