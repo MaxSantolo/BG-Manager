@@ -8,6 +8,7 @@ import PlaysHeatmap from "@/components/PlaysHeatmap";
 import { OUT_OF_COLLECTION } from "@/lib/status";
 import { findNeverPlayed } from "@/lib/neverPlayed";
 import { playsByDay } from "@/lib/playCalendar";
+import { parsePlayers } from "@/lib/playPlayers";
 import { APP_TZ, dayInput, formatDay, formatDayNum, todayInput } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
@@ -233,9 +234,7 @@ export default async function Home() {
           ) : (
             <div className="divide-y" style={{ borderColor: "var(--border)" }}>
               {recentPlays.map((p) => {
-                const players: { name: string; win?: boolean }[] = p.players
-                  ? (() => { try { return JSON.parse(p.players); } catch { return []; } })()
-                  : [];
+                const players = parsePlayers(p.players);
                 const collId = p.gameId ?? (p.bggGameId ? byBgg.get(p.bggGameId) : undefined);
                 const name = (
                   <span className="text-sm font-medium truncate block"

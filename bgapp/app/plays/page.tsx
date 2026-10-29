@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { formatDay, todayInput, APP_TZ } from "@/lib/dates";
 import { countByDay } from "@/lib/playCalendar";
+import { parsePlayers } from "@/lib/playPlayers";
 import PlaysHeatmap from "@/components/PlaysHeatmap";
 import { Trophy, Clock, Dices, Users } from "lucide-react";
 import PlaysImporter from "@/components/PlaysImporter";
@@ -161,9 +162,7 @@ export default async function PlaysPage() {
             <div className="divide-y overflow-x-auto" style={{ borderColor: "var(--border)" }}>
               {rawPlays.map(play => {
                 const collId = play.gameId ?? (play.bggGameId ? gameIdByBggId.get(play.bggGameId) : null);
-                const parsedPlayers: { name: string; win: boolean; score: string; team?: string }[] = play.players
-                  ? (() => { try { return JSON.parse(play.players); } catch { return []; } })()
-                  : [];
+                const parsedPlayers = parsePlayers(play.players);
                 const winners = parsedPlayers.filter(p => p.win).map(p => p.name);
 
                 return (

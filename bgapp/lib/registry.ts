@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getBggUser } from "@/lib/bgg";
+import { parsePlayers } from "@/lib/playPlayers";
 
-interface StoredPlayer { name?: string; username?: string }
 
 /**
  * Rebuilds the place registry from the locations recorded on plays, so places
@@ -48,15 +48,7 @@ export async function rebuildPlayers(): Promise<{ created: number; updated: numb
 
   const counts = new Map<string, { count: number; username: string | null }>();
   for (const play of plays) {
-    let parsed: StoredPlayer[];
-    try {
-      parsed = JSON.parse(play.players!);
-    } catch {
-      continue;
-    }
-    if (!Array.isArray(parsed)) continue;
-
-    for (const entry of parsed) {
+    for (const entry of parsePlayers(play.players)) {
       const name = entry?.name?.trim();
       if (!name) continue;
       const prev = counts.get(name);

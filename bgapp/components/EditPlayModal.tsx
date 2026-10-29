@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/fetchClient";
 import { asWinMode, WIN_MODES, type WinMode } from "@/lib/winner";
 import PlayerPicker, { type PlayPlayer } from "./PlayerPicker";
 import PlacePicker from "./PlacePicker";
+import { parsePlayers } from "@/lib/playPlayers";
 
 
 interface Play {
@@ -41,9 +42,7 @@ export default function EditPlayModal({ play, winMode }: Props) {
   const [location, setLocation]   = useState(play.location ?? "");
   const [notes, setNotes]         = useState(play.notes ?? "");
   const [incomplete, setIncomplete] = useState(play.incomplete);
-  const [players, setPlayers]     = useState<PlayPlayer[]>(() => {
-    try { return play.players ? JSON.parse(play.players) : []; } catch { return []; }
-  });
+  const [players, setPlayers]     = useState<PlayPlayer[]>(() => parsePlayers(play.players));
   const [mode, setMode]           = useState<WinMode>(asWinMode(winMode));
   const [saving, setSaving]       = useState(false);
   const [deleting, setDeleting]   = useState(false);

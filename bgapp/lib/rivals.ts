@@ -1,8 +1,8 @@
 /**
  * Rivali e compagni di gioco: chi gioca con chi, chi batte chi.
  *
- * Modulo puro (nessun import): lo usano la pagina sul server e il confronto
- * testa a testa nel browser, sugli stessi record già ripuliti.
+ * Modulo puro (niente server, niente database): lo usano la pagina sul server e
+ * il confronto testa a testa nel browser, sugli stessi record già ripuliti.
  *
  * Le regole, decise sui dati (oltre 330 partite su 390 hanno un vincitore e un vinto):
  *  - tutto è pesato su quantity, come nel resto dell'app;
@@ -15,6 +15,8 @@
  *    Il giocatore anonimo resta in partita come avversario ma non ha una
  *    scheda e non può essere la nemesi di nessuno.
  */
+
+import { parsePlayers } from "./playPlayers";
 
 export interface RivalPlay {
   id: number;
@@ -54,13 +56,12 @@ export function toRivalPlays(
 ): RivalPlay[] {
   const out: RivalPlay[] = [];
   for (const r of rows) {
-    let raw: { name?: string; username?: string; win?: boolean | string; team?: string }[] = [];
-    try { raw = r.players ? JSON.parse(r.players) : []; } catch { /* riga illeggibile: niente giocatori */ }
-    if (!Array.isArray(raw) || raw.length === 0) continue;
+    const raw = parsePlayers(r.players);
+    if (raw.length === 0) continue;
     const byName = new Map<string, RivalPlay["players"][number]>();
     raw.forEach((x, i) => {
       const name = canon(x.name, x.username);
-      const win = x.win === true || x.win === "true" || x.win === "1";
+      const win = x.win;
       const team = x.team?.trim() || null;
       // Più anonimi nella stessa partita sono persone diverse: chiavi distinte.
       const key = name === ANON ? `${ANON}#${i}` : name;

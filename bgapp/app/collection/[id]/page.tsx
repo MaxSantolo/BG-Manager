@@ -8,6 +8,7 @@ import LoanManager from "@/components/LoanManager";
 import LogPlayModal from "@/components/LogPlayModal";
 import EditPlayModal from "@/components/EditPlayModal";
 import StatusBadge from "@/components/StatusBadge";
+import { parsePlayers } from "@/lib/playPlayers";
 
 export default async function GameDetailPage({
   params,
@@ -214,8 +215,7 @@ export default async function GameDetailPage({
             ) : (
               <div className="divide-y" style={{ borderColor: "var(--border)" }}>
                 {plays.map(play => {
-                  const players: { name: string; win: boolean; score: string; team?: string }[] =
-                    play.players ? (() => { try { return JSON.parse(play.players); } catch { return []; } })() : [];
+                  const players = parsePlayers(play.players);
                   return (
                     <div key={play.id} className="flex items-start gap-3 py-2 first:pt-0 last:pb-0">
                       <div className="flex-shrink-0 text-right" style={{ minWidth: "80px" }}>
