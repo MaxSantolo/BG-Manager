@@ -9,6 +9,8 @@ import LogPlayModal from "@/components/LogPlayModal";
 import EditPlayModal from "@/components/EditPlayModal";
 import StatusBadge from "@/components/StatusBadge";
 import { parsePlayers } from "@/lib/playPlayers";
+import CardsPanel from "@/components/CardsPanel";
+import { parseCardSets } from "@/lib/cardSizes";
 
 export default async function GameDetailPage({
   params,
@@ -19,7 +21,7 @@ export default async function GameDetailPage({
 }) {
   const [{ id }, { from }] = await Promise.all([params, searchParams]);
   const returnUrl = from ? decodeURIComponent(from) : "/collection";
-  const [game, plays, settings] = await Promise.all([
+  const [game, plays, settings, sleeveFormats] = await Promise.all([
     prisma.game.findUnique({
       where: { id: parseInt(id) },
       include: {
@@ -36,6 +38,7 @@ export default async function GameDetailPage({
       orderBy: { date: "desc" },
     }),
     prisma.settings.findUnique({ where: { id: 1 } }),
+    prisma.sleeve.findMany({ orderBy: { size: "asc" }, select: { id: true, size: true, label: true, quantity: true } }),
   ]);
   if (!game) notFound();
 
@@ -184,6 +187,15 @@ export default async function GameDetailPage({
           )}
         </div>
       </div>
+
+      {/* Carte da BGG: solo per i giochi collegati, caricate a richiesta */}
+      {game.bggId && (
+        <CardsPanel gameId={game.id}
+          initialSets={parseCardSets(game.cardTypes)} initialSetId={game.cardSetId}
+          initialCheckedAt={game.cardsCheckedAt ? game.cardsCheckedAt.toISOString() : null}
+          formats={sleeveFormats}
+          assigned={game.gameSleeves.map((gs) => ({ sleeveId: gs.sleeveId, qty: gs.qty }))} />
+      )}
 
       {/* Partite */}
       {(() => {

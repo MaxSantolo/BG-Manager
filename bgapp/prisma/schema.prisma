@@ -40,8 +40,9 @@ model Game {
   preorderPaid     Boolean         @default(false)
   preorderEta      DateTime?
   /// Carte del gioco da BGG (sezione Sleeves), caricate solo a richiesta dalla
-  /// scheda: card set scelto, tipi di carta in JSON [{w,h,qty,name}] e quando si
-  /// è controllato. cardTypes "[]" con cardsCheckedAt = BGG non ha dati.
+  /// scheda: tutti i card set in JSON {sets:[{id,name,addon,types:[{w,h,qty,name}]}]},
+  /// quello in uso (il primo, salvo scelta diversa) e quando si è controllato.
+  /// sets vuoto con cardsCheckedAt = BGG non ha carte: niente da imbustare.
   cardSetId        Int?
   cardTypes        String?
   cardsCheckedAt   DateTime?
