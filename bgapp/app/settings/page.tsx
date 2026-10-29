@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { Settings } from "lucide-react";
 import SettingsForm from "./SettingsForm";
 import StatusConfigEditor from "./StatusConfigEditor";
+import CollectionStartForm from "./CollectionStartForm";
+import { dayInput } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +30,7 @@ export default async function SettingsPage() {
         initialAutoSync={settings?.autoSyncOnStart ?? true}
         initialLastSync={lastSync}
       />
+      <CollectionStartForm initial={settings?.collectionStart ? dayInput(settings.collectionStart) : ""} />
       <StatusConfigEditor />
     </div>
   );

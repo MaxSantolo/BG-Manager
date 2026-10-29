@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseStatusConfig } from "@/lib/status";
+import { dayInput, parseDayInput } from "@/lib/dates";
 
 type SettingsRow = {
   bggUsername: string | null;
@@ -9,6 +10,7 @@ type SettingsRow = {
   autoSyncOnStart: boolean;
   lastSyncAt: Date | null;
   statusConfig: string | null;
+  collectionStart: Date | null;
 };
 
 /**
@@ -24,6 +26,7 @@ function publicSettings(s: SettingsRow | null) {
     autoSyncOnStart: s?.autoSyncOnStart ?? true,
     lastSyncAt: s?.lastSyncAt ?? null,
     statusConfig: parseStatusConfig(s?.statusConfig),
+    collectionStart: s?.collectionStart ? dayInput(s.collectionStart) : null,
   };
 }
 
@@ -58,6 +61,16 @@ export async function PUT(req: NextRequest) {
     ? JSON.stringify(parseStatusConfig(JSON.stringify(body.statusConfig)))
     : undefined;
 
+  // Inizio collezione: "AAAA-MM-GG" (giorno a mezzanotte UTC), "" = togli,
+  // assente = non toccare.
+  let collectionStart: Date | null | undefined = undefined;
+  if ("collectionStart" in body) {
+    const v = typeof body.collectionStart === "string" ? body.collectionStart.trim() : "";
+    const d = v ? parseDayInput(v, 1970) : null;
+    if (v && !d) return NextResponse.json({ error: "Data di inizio non valida" }, { status: 400 });
+    collectionStart = d;
+  }
+
   const settings = await prisma.settings.upsert({
     where:  { id: 1 },
     create: {
@@ -67,6 +80,7 @@ export async function PUT(req: NextRequest) {
       bggCookie: bggCookie ?? null,
       autoSyncOnStart: autoSync ?? true,
       statusConfig: statusConfig ?? null,
+      collectionStart: collectionStart ?? null,
     },
     update: {
       // undefined tells Prisma to leave the column untouched.
@@ -75,6 +89,7 @@ export async function PUT(req: NextRequest) {
       bggCookie,
       autoSyncOnStart: autoSync,
       statusConfig,
+      collectionStart,
     },
   });
   return NextResponse.json(publicSettings(settings));

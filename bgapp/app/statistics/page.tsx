@@ -10,14 +10,6 @@ import { EXPANSION_TYPE } from "@/lib/expansion";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Inizio della collezione, detto da Max: gli acquisti senza data (la collezione
- * di partenza, prima che si registrassero le date a marzo 2026) sono "fino al
- * 01/09/2024". Nessun gioco viene modificato: la data vale solo qui, per la
- * spesa al giorno e per collocare quegli acquisti nel grafico per anno.
- */
-const COLLECTION_START = new Date("2024-09-01T00:00:00.000Z");
-
 export default async function StatisticsPage() {
   const [allGames, wishlistCount, sleeveUsageRaw, settings, plays, neverPlayed] = await Promise.all([
     prisma.game.findMany(),
@@ -29,7 +21,7 @@ export default async function StatisticsPage() {
       orderBy: { _sum: { qty: "desc" } },
       take: 10,
     }),
-    prisma.settings.findUnique({ where: { id: 1 }, select: { statusConfig: true } }),
+    prisma.settings.findUnique({ where: { id: 1 }, select: { statusConfig: true, collectionStart: true } }),
     prisma.play.findMany({ select: { gameId: true, bggGameId: true, gameName: true, quantity: true } }),
     findNeverPlayed(),
   ]);
@@ -59,13 +51,19 @@ export default async function StatisticsPage() {
   const rated     = inHouse.filter((g) => g.bggRating != null);
   const avgRating = rated.length > 0 ? rated.reduce((s, g) => s + (g.bggRating ?? 0), 0) / rated.length : null;
 
-  // Spesa al giorno = totale speso / giorni dall'inizio della collezione. Se un
-  // acquisto datato fosse più vecchio dell'inizio dichiarato, si parte da lì:
-  // la media non deve mai cominciare dopo un acquisto vero.
+  // Spesa al giorno = totale speso / giorni dall'inizio della collezione, che si
+  // imposta nelle Impostazioni (01/09/2024: gli acquisti senza data, la
+  // collezione di partenza, sono "fino a quel giorno"). Nessun gioco viene
+  // modificato: la data serve qui, per la spesa al giorno e per mettere quegli
+  // acquisti nel grafico per anno. Se un acquisto datato fosse più vecchio, si
+  // parte da lì: la media non deve mai cominciare dopo un acquisto vero. Senza
+  // data impostata, si parte dal primo acquisto datato (o da oggi).
+  const today = todayInput(APP_TZ);
   const datedTimes = bought.filter((g) => g.purchaseDate).map((g) => new Date(g.purchaseDate!).getTime());
-  const collectionStart = new Date(Math.min(COLLECTION_START.getTime(), ...datedTimes));
+  const startTimes = settings?.collectionStart ? [...datedTimes, settings.collectionStart.getTime()] : datedTimes;
+  const collectionStart = new Date(startTimes.length ? Math.min(...startTimes) : Date.parse(today));
   // "Oggi" è il giorno di Roma (lib/dates), non l'orologio del server.
-  const daysOwned       = Math.max(1, Math.floor((Date.parse(todayInput(APP_TZ)) - collectionStart.getTime()) / 86_400_000));
+  const daysOwned       = Math.max(1, Math.floor((Date.parse(today) - collectionStart.getTime()) / 86_400_000));
   const dailySpend      = totalInvested / daysOwned;
 
   const playCounts = playCountsByGame(plays, allGames);
