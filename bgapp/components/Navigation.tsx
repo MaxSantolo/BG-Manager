@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Library, Heart, BarChart3, BookOpen, Package, LogOut, Menu, Dice5, Trophy,
-  Settings, Users, Sparkles, Truck, HandCoins, Swords, X, type LucideIcon,
+  Settings, Users, Sparkles, Truck, HandCoins, Swords, House, X, type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -49,6 +49,9 @@ const GROUPS: { label: string; items: Item[] }[] = [
   },
 ];
 
+/** Fuori dai gruppi, in cima: prima si raggiungeva solo dal logo, e non lo trovava nessuno. */
+const HOME: Item = { href: "/", label: "Home", icon: House };
+
 /** Attiva sulla pagina stessa e sulle sue sottopagine (/collection/123), non sui prefissi casuali. */
 const isActive = (pathname: string, href: string) => pathname === href || pathname.startsWith(href + "/");
 
@@ -78,6 +81,7 @@ function NavLink({ item, pathname, sub, onNavigate }: {
 function NavGroups({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
   return (
     <div className="space-y-5">
+      <NavLink item={HOME} pathname={pathname} onNavigate={onNavigate} />
       {GROUPS.map((g) => (
         <div key={g.label}>
           <p className="eyebrow px-2.5 mb-1.5" style={{ color: "var(--text-muted)" }}>{g.label}</p>
