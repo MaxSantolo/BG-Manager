@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { formatDay } from "@/lib/dates";
 
 const DAY = 86_400_000;
@@ -40,8 +41,8 @@ function weeksOf(year: number) {
  * quante più partite. `today` arriva dal server (giorno di Roma) così il disegno
  * è identico in server e browser e i giorni futuri si riconoscono.
  */
-export default function PlaysHeatmap({ days, today, title = "Calendario delle partite" }: {
-  days: Record<string, number>; today: string; title?: string;
+export default function PlaysHeatmap({ days, today, title = "Calendario delle partite", href }: {
+  days: Record<string, number>; today: string; title?: string; href?: string;
 }) {
   const thisYear = Number(today.slice(0, 4));
   const years = useMemo(() => {
@@ -88,7 +89,9 @@ export default function PlaysHeatmap({ days, today, title = "Calendario delle pa
   return (
     <div className="card space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold" style={{ color: "var(--text-secondary)" }}>{title}</h2>
+        <h2 className="text-sm font-semibold" style={{ color: "var(--text-secondary)" }}>
+          {href ? <Link href={href} style={{ color: "inherit", textDecoration: "none" }}>{title} →</Link> : title}
+        </h2>
         {years.length > 1 && (
           <div className="flex gap-1">
             {years.map((y) => (
