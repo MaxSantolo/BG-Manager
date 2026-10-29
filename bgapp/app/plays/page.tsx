@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { formatDay, todayInput, APP_TZ } from "@/lib/dates";
 import { countByDay } from "@/lib/playCalendar";
+import { playGameRef, gameIdsByBggId } from "@/lib/playCounts";
 import { parsePlayers } from "@/lib/playPlayers";
 import PlaysHeatmap from "@/components/PlaysHeatmap";
 import { Trophy, Clock, Dices, Users } from "lucide-react";
@@ -22,7 +23,7 @@ function formatDuration(mins: number): string {
 const formatDate = formatDay;
 
 export default async function PlaysPage() {
-  const [rawPlays, statPlays, topGames, settings, collectionGamesForLog, collectionGames] = await Promise.all([
+  const [rawPlays, statPlays, settings, collectionGamesForLog, collectionGames] = await Promise.all([
     prisma.play.findMany({
       orderBy: { date: "desc" },
       take: 100,
@@ -35,13 +36,7 @@ export default async function PlaysPage() {
     }),
     // All plays (lightweight) — stats must cover the whole history, not just the last 100
     prisma.play.findMany({
-      select: { date: true, quantity: true, duration: true, bggGameId: true, gameName: true },
-    }),
-    prisma.play.groupBy({
-      by: ["gameName", "bggGameId", "gameId"],
-      _sum: { quantity: true },
-      orderBy: { _sum: { quantity: "desc" } },
-      take: 10,
+      select: { date: true, quantity: true, duration: true, bggGameId: true, gameId: true, gameName: true },
     }),
     prisma.settings.findUnique({ where: { id: 1 } }),
     prisma.game.findMany({
@@ -58,10 +53,22 @@ export default async function PlaysPage() {
   const totalMinutes  = statPlays
     .filter(p => p.duration)
     .reduce((s, p) => s + (p.duration ?? 0) * p.quantity, 0);
-  const uniqueGames   = new Set(statPlays.map(p => p.bggGameId ?? p.gameName)).size;
 
   // Index collection games by bggId for links
-  const gameIdByBggId = new Map(collectionGames.map(g => [g.bggId!, g.id]));
+  const gameIdByBggId = gameIdsByBggId(collectionGames);
+
+  // Partite per gioco con la stessa chiave di Statistiche (lib/playCounts): una
+  // partita legata solo al bggId non spezza il gioco in due righe, e "Giochi
+  // diversi" coincide con quello delle Statistiche.
+  const byGame = new Map<string, { key: string; name: string; count: number; gameId: number | null }>();
+  for (const p of statPlays) {
+    const ref = playGameRef(p, gameIdByBggId);
+    const e = byGame.get(ref.key) ?? { key: ref.key, name: p.gameName, count: 0, gameId: ref.gameId };
+    e.count += p.quantity;
+    byGame.set(ref.key, e);
+  }
+  const topGames = [...byGame.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)).slice(0, 10);
+  const uniqueGames = byGame.size;
 
   return (
     <div className="space-y-6">
@@ -108,10 +115,10 @@ export default async function PlaysPage() {
         <div className="card text-center space-y-1">
           <Users size={20} className="mx-auto" style={{ color: "var(--text-muted)" }} />
           <p className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>
-            {topGames[0]?._sum.quantity ?? "—"}
+            {topGames[0]?.count ?? "—"}
           </p>
           <p className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>
-            {topGames[0]?.gameName ? `Max: ${topGames[0].gameName}` : "Nessuna partita"}
+            {topGames[0] ? `Max: ${topGames[0].name}` : "Nessuna partita"}
           </p>
         </div>
       </div>
@@ -127,23 +134,23 @@ export default async function PlaysPage() {
           ) : (
             <div className="space-y-2">
               {topGames.map((g, i) => {
-                const collId = g.gameId ?? (g.bggGameId ? gameIdByBggId.get(g.bggGameId) : null);
+                const collId = g.gameId;
                 const inner = (
                   <div className="flex items-center gap-2">
                     <span className="text-xs w-5 text-right font-mono flex-shrink-0"
                       style={{ color: "var(--text-muted)" }}>{i + 1}</span>
                     <span className="flex-1 text-sm truncate" style={{ color: "var(--text-primary)" }}>
-                      {g.gameName}
+                      {g.name}
                     </span>
                     <span className="text-xs font-mono flex-shrink-0" style={{ color: "var(--text-secondary)" }}>
-                      ×{g._sum.quantity}
+                      ×{g.count}
                     </span>
                   </div>
                 );
                 return collId
-                  ? <Link key={g.gameName} href={`/collection/${collId}`} className="block py-1"
+                  ? <Link key={g.key} href={`/collection/${collId}`} className="block py-1"
                       style={{ textDecoration: "none" }}>{inner}</Link>
-                  : <div key={g.gameName} className="py-1">{inner}</div>;
+                  : <div key={g.key} className="py-1">{inner}</div>;
               })}
             </div>
           )}

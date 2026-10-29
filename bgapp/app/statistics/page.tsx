@@ -7,6 +7,7 @@ import Charts from "./Charts";
 import CostPerPlay from "./CostPerPlay";
 import Taste from "./Taste";
 import { EXPANSION_TYPE } from "@/lib/expansion";
+import { playGameRef, gameIdsByBggId } from "@/lib/playCounts";
 
 export const dynamic = "force-dynamic";
 
@@ -192,17 +193,12 @@ function round2(n: number) {
  */
 type PlayRow = { gameId: number | null; bggGameId: number | null; gameName: string; quantity: number };
 
-/** Partite per gioco: chiave "g:<id locale>" quando si risale al gioco, altrimenti bggId o nome. */
+/** Partite per gioco, con la stessa chiave della pagina Partite (lib/playCounts). */
 function playCountsByGame(plays: PlayRow[], games: { id: number; bggId: number | null }[]) {
-  const gameIdByBggId = new Map<number, number>();
-  for (const g of games) if (g.bggId != null) gameIdByBggId.set(g.bggId, g.id);
-
+  const byBgg = gameIdsByBggId(games);
   const countByGame = new Map<string, number>();
   for (const p of plays) {
-    const key =
-      p.gameId != null                              ? `g:${p.gameId}` :
-      p.bggGameId != null                           ? `g:${gameIdByBggId.get(p.bggGameId) ?? `b:${p.bggGameId}`}` :
-      `n:${p.gameName.trim().toLowerCase()}`;
+    const { key } = playGameRef(p, byBgg);
     countByGame.set(key, (countByGame.get(key) ?? 0) + Math.max(1, p.quantity));
   }
   return countByGame;
