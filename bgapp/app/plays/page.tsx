@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { formatDay } from "@/lib/dates";
+import { formatDay, todayInput, APP_TZ } from "@/lib/dates";
+import { countByDay } from "@/lib/playCalendar";
+import PlaysHeatmap from "@/components/PlaysHeatmap";
 import { Trophy, Clock, Dices, Users } from "lucide-react";
 import PlaysImporter from "@/components/PlaysImporter";
 import LogPlayModal from "@/components/LogPlayModal";
@@ -32,7 +34,7 @@ export default async function PlaysPage() {
     }),
     // All plays (lightweight) — stats must cover the whole history, not just the last 100
     prisma.play.findMany({
-      select: { quantity: true, duration: true, bggGameId: true, gameName: true },
+      select: { date: true, quantity: true, duration: true, bggGameId: true, gameName: true },
     }),
     prisma.play.groupBy({
       by: ["gameName", "bggGameId", "gameId"],
@@ -112,6 +114,8 @@ export default async function PlaysPage() {
           </p>
         </div>
       </div>
+
+      <PlaysHeatmap days={countByDay(statPlays)} today={todayInput(APP_TZ)} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Top games */}
