@@ -33,7 +33,12 @@ export async function GET(req: NextRequest) {
   // Masonry keeps every cover at its own proportions, so nothing is cropped.
   const columns = packColumns(report.games, cols, colWidth);
   const tallest = Math.max(...columnHeights(columns, colWidth, gap));
-  const height  = Math.ceil(pad * 2 + 140 + tallest);
+  // Testata calcolata, non stimata a occhio: con 140px fissi il fondo del collage
+  // veniva tagliato (la testata vera è ~157px, e un titolo lungo va a capo).
+  // Interlinee fissate negli stili; ~40 caratteri a riga è una stima prudente.
+  const titleLines = Math.min(3, Math.max(1, Math.ceil(title.length / 40)));
+  const headerH = Math.ceil(titleLines * 46 * 1.15) + 8 + Math.ceil(24 * 1.25) + 10 + Math.ceil(22 * 1.25) + 28;
+  const height  = Math.ceil(pad * 2 + headerH + tallest);
 
   const hours = Math.round(report.totalMinutes / 60);
 
@@ -51,11 +56,11 @@ export async function GET(req: NextRequest) {
         }}
       >
         <div style={{ display: "flex", flexDirection: "column", marginBottom: 28 }}>
-          <div style={{ display: "flex", fontSize: 46, fontWeight: 700, color: "#f0ebe0" }}>{title}</div>
-          <div style={{ display: "flex", fontSize: 24, color: "#9aacbf", marginTop: 8 }}>
+          <div style={{ display: "flex", fontSize: 46, lineHeight: 1.15, fontWeight: 700, color: "#f0ebe0" }}>{title}</div>
+          <div style={{ display: "flex", fontSize: 24, lineHeight: 1.25, color: "#9aacbf", marginTop: 8 }}>
             {formatDay(from)} — {formatDay(to)}
           </div>
-          <div style={{ display: "flex", fontSize: 22, color: "#c0392b", marginTop: 10 }}>
+          <div style={{ display: "flex", fontSize: 22, lineHeight: 1.25, color: "#c0392b", marginTop: 10 }}>
             {report.totalPlays} partite · {report.totalGames} giochi
             {hours > 0 ? ` · ${hours} ore` : ""}
           </div>
