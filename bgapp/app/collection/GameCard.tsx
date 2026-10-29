@@ -41,12 +41,15 @@ export default function GameCard({
   fromUrl,
 }: GameCardProps) {
   return (
-    <Link
-      href={fromUrl ? `/collection/${id}?from=${encodeURIComponent(fromUrl)}` : `/collection/${id}`}
-      className="card p-3.5 flex gap-3 items-center transition-colors hover:border-[var(--border-light)]"
-      style={{ textDecoration: "none" }}
-      tabIndex={0}
-    >
+    // La scheda porta al gioco con un link steso sopra (absolute inset-0), non
+    // avvolgendo tutto in un <a>: dentro c'è il link a BGG, e un <a> dentro un <a>
+    // non è HTML valido (il browser spezza la scheda, React segnala l'idratazione).
+    <div className="card p-3.5 flex gap-3 items-center transition-colors hover:border-[var(--border-light)] relative">
+      <Link
+        href={fromUrl ? `/collection/${id}?from=${encodeURIComponent(fromUrl)}` : `/collection/${id}`}
+        aria-label={name}
+        className="absolute inset-0 rounded-[inherit]"
+      />
       {thumbnail && (
         <img src={thumbnail} alt="" className="w-16 h-16 object-contain rounded" />
       )}
@@ -58,9 +61,9 @@ export default function GameCard({
               href={`https://boardgamegeek.com/boardgame/${bggId}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="ml-1"
-              onClick={e => e.stopPropagation()}
+              className="ml-1 relative z-10"
               tabIndex={-1}
+              aria-label="Apri su BoardGameGeek"
             >
               <ExternalLink size={14} style={{ color: "var(--text-muted)" }} />
             </a>
@@ -80,6 +83,6 @@ export default function GameCard({
           {bggRating && <span>Rating: {bggRating.toFixed(1)}</span>}
         </div>
       </div>
-    </Link>
+    </div>
   );
 }
