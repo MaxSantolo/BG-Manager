@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { prismaTx } from "@/lib/prismaTx";
 import { getBggUser } from "@/lib/bgg";
 import { parsePlayers } from "@/lib/playPlayers";
 
@@ -16,7 +17,9 @@ export async function rebuildPlaces(): Promise<{ created: number; updated: numbe
 
   // Zero every count first, so a place that lost all its plays doesn't keep a
   // stale total (the loop below only touches places still present in history).
-  await prisma.place.updateMany({ data: { playCount: 0 } });
+  // updateMany passa dal client WebSocket: quello HTTP la rifiuta ("Transactions
+  // are not supported in HTTP mode") e faceva fallire la sync che importava partite.
+  await prismaTx.place.updateMany({ data: { playCount: 0 } });
 
   let created = 0, updated = 0;
   for (const row of grouped) {
@@ -86,7 +89,9 @@ export async function rebuildPlayers(): Promise<{ created: number; updated: numb
   // Zero every count first: a player who lost all their plays (e.g. after a
   // merge or delete) must not keep a stale total — the loop only touches players
   // still present in history.
-  await prisma.player.updateMany({ data: { playCount: 0 } });
+  // updateMany passa dal client WebSocket: quello HTTP la rifiuta ("Transactions
+  // are not supported in HTTP mode") e faceva fallire la sync che importava partite.
+  await prismaTx.player.updateMany({ data: { playCount: 0 } });
 
   let created = 0, updated = 0, avatars = 0;
   for (const [name, { count, username }] of folded) {

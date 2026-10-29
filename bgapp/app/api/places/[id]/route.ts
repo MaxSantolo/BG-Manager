@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { prismaTx } from "@/lib/prismaTx";
 
 /**
  * Renaming a place also rewrites the plays that referenced it, so the registry
@@ -20,7 +21,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const clash = await prisma.place.findUnique({ where: { name: cleanName } });
     if (clash) return NextResponse.json({ error: `"${cleanName}" esiste già` }, { status: 409 });
 
-    await prisma.play.updateMany({
+    // Client WebSocket: quello HTTP rifiuta updateMany (transazione implicita).
+    await prismaTx.play.updateMany({
       where: { location: current.name },
       data:  { location: cleanName },
     });
