@@ -39,6 +39,12 @@ model Game {
   preorderSource   PreorderSource? @relation(fields: [preorderSourceId], references: [id], onDelete: SetNull)
   preorderPaid     Boolean         @default(false)
   preorderEta      DateTime?
+  /// Carte del gioco da BGG (sezione Sleeves), caricate solo a richiesta dalla
+  /// scheda: card set scelto, tipi di carta in JSON [{w,h,qty,name}] e quando si
+  /// è controllato. cardTypes "[]" con cardsCheckedAt = BGG non ha dati.
+  cardSetId        Int?
+  cardTypes        String?
+  cardsCheckedAt   DateTime?
   /// How the winner of a play is decided: high|low (auto from scores),
   /// coop (shared win/loss), manual (tick winners by hand). See lib/winner.ts.
   winMode       String    @default("high")
