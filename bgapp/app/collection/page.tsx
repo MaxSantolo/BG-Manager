@@ -14,6 +14,7 @@ interface SearchParams {
   page?: string;
   limit?: string;
   sort?: string;
+  view?: string;
 }
 
 export default async function CollectionPage({
@@ -21,7 +22,7 @@ export default async function CollectionPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const { search = "", status = "", type = "", location = "", page = "1", limit: limitParam = "20", sort = "name_asc" } = await searchParams;
+  const { search = "", status = "", type = "", location = "", page = "1", limit: limitParam = "20", sort = "name_asc", view = "" } = await searchParams;
   const pageNum = Math.max(1, parseInt(page) || 1);
   const limit   = [20, 40, 100].includes(parseInt(limitParam)) ? parseInt(limitParam) : 20;
   const skip    = (pageNum - 1) * limit;
@@ -105,6 +106,7 @@ export default async function CollectionPage({
         locations={locations}
         initialLimit={limit}
         initialSort={sort}
+        initialView={view === "covers" ? "covers" : "list"}
       />
     </div>
   );

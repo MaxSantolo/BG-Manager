@@ -3,7 +3,7 @@
 import { useState, useTransition, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { Search, ChevronLeft, ChevronRight, ExternalLink, Download } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, ExternalLink, Download, List, LayoutGrid } from "lucide-react";
 import { GAME_TYPES } from "@/lib/types";
 import { useStatuses } from "@/components/StatusProvider";
 import { OUT_OF_COLLECTION } from "@/lib/status";
@@ -54,6 +54,7 @@ interface Props {
   initialLocation: string;
   initialLimit: number;
   initialSort: string;
+  initialView: "list" | "covers";
   locations: { id: number; name: string }[];
 }
 
@@ -68,6 +69,7 @@ export default function CollectionTable({
   initialLocation,
   initialLimit,
   initialSort,
+  initialView,
   locations,
 }: Props) {
   const router = useRouter();
@@ -82,9 +84,10 @@ export default function CollectionTable({
   const [location, setLocation] = useState(initialLocation);
   const [limit, setLimit]   = useState(initialLimit);
   const [sort, setSort]     = useState(initialSort);
+  const [view, setView]     = useState(initialView);
 
   function buildParams(overrides: Record<string, string>) {
-    const merged = { search, status, type, location, page: String(page), limit: String(limit), sort, ...overrides };
+    const merged = { search, status, type, location, page: String(page), limit: String(limit), sort, view, ...overrides };
     const p = new URLSearchParams();
     if (merged.search) p.set("search", merged.search);
     if (merged.status) p.set("status", merged.status);
@@ -93,6 +96,7 @@ export default function CollectionTable({
     if (merged.page && merged.page !== "1") p.set("page", merged.page);
     if (merged.limit && merged.limit !== "20") p.set("limit", merged.limit);
     if (merged.sort && merged.sort !== "name_asc") p.set("sort", merged.sort);
+    if (merged.view === "covers") p.set("view", "covers");
     return p.toString();
   }
 
@@ -122,6 +126,13 @@ export default function CollectionTable({
   function onSort(val: string)   { setSort(val);   push({ sort:   val, page: "1" }); }
   function onLimit(val: number)  { setLimit(val);  push({ limit: String(val), page: "1" }); }
   function goPage(p: number)     { push({ page: String(p) }); }
+  // Un muro di 20 copertine non è un muro: passando alle copertine dal valore
+  // predefinito si sale a 100 per pagina. Una scelta esplicita (40, 100) resta.
+  function onView(v: "list" | "covers") {
+    const lim = v === "covers" && limit === 20 ? 100 : limit;
+    setView(v); setLimit(lim);
+    push({ view: v, limit: String(lim), page: "1" });
+  }
 
   // URL corrente con tutti i filtri attivi — passata come "from" ai link dei giochi
   const fromUrl = (() => {
@@ -173,6 +184,19 @@ export default function CollectionTable({
             <option key={n} value={n}>{n} / pag.</option>
           ))}
         </select>
+        <div className="flex rounded-md overflow-hidden" role="group" aria-label="Vista"
+          style={{ border: "1px solid var(--border)" }}>
+          {([["list", List, "Elenco"], ["covers", LayoutGrid, "Copertine"]] as const).map(([v, Icon, label]) => (
+            <button key={v} type="button" onClick={() => onView(v)} aria-pressed={view === v} title={label}
+              className="px-2.5 py-1.5 text-xs inline-flex items-center gap-1.5"
+              style={{
+                backgroundColor: view === v ? "rgba(192, 52, 52, 0.16)" : "transparent",
+                color: view === v ? "var(--text-primary)" : "var(--text-muted)",
+              }}>
+              <Icon size={13} /> {label}
+            </button>
+          ))}
+        </div>
         <a href={exportUrl()} download className="btn-ghost p-2" title="Esporta CSV">
           <Download size={14} style={{ color: "var(--text-muted)" }} />
         </a>
@@ -181,6 +205,41 @@ export default function CollectionTable({
         )}
       </div>
 
+      {view === "covers" && (
+        games.length === 0 ? (
+          <div className="card text-center py-8" style={{ color: "var(--text-muted)" }}>Nessun gioco trovato</div>
+        ) : (
+          // Muro di copertine: le miniature BGG, non le immagini piene (100 per pagina peserebbero megabyte).
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8 gap-2 sm:gap-3">
+            {games.map((g) => (
+              <Link key={g.id} href={`/collection/${g.id}?from=${encodeURIComponent(fromUrl)}`} title={g.name}
+                className="group relative block aspect-square overflow-hidden rounded-lg"
+                style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border)" }}>
+                {g.thumbnail ? (
+                  <>
+                    <img src={g.thumbnail} alt={g.name} loading="lazy"
+                      className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105" />
+                    {/* nome: sempre visibile al tocco, al passaggio del mouse dove il mouse c'è */}
+                    {/* il padding sta fuori dal line-clamp, se no la terza riga spunta nel padding */}
+                    <span className="absolute inset-x-0 bottom-0 px-1.5 pb-1 pt-5 transition-opacity [@media(hover:hover)]:opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+                      style={{ background: "linear-gradient(transparent, rgba(5, 9, 18, 0.92))", color: "#fff" }}>
+                      <span className="text-[11px] leading-tight line-clamp-2">{g.name}</span>
+                    </span>
+                  </>
+                ) : (
+                  <span className="absolute inset-0 flex items-center justify-center p-2 text-center text-xs"
+                    style={{ color: "var(--text-secondary)" }}>{g.name}</span>
+                )}
+                {g.loans && g.loans.length > 0 && (
+                  <span className="absolute top-1 right-1 badge bg-amber-900 text-amber-200 text-[10px]">In prestito</span>
+                )}
+              </Link>
+            ))}
+          </div>
+        )
+      )}
+
+      {view === "list" && (<>
       {/* Mobile: Card view */}
       <div className="flex flex-col gap-3 sm:hidden">
         {games.length === 0 ? (
@@ -282,6 +341,8 @@ export default function CollectionTable({
       </div>
 
       {/* Pagination */}
+      </>)}
+
       <div className="flex items-center justify-between text-sm" style={{ color: "var(--text-secondary)" }}>
         <span>{total} giochi totali</span>
         {totalPages > 1 && (
