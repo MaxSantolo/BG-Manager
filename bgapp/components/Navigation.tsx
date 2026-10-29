@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Library, Heart, BarChart3, BookOpen, Package, LogOut, Menu, Dice5, Trophy,
-  Settings, Users, Sparkles, Truck, HandCoins, X, type LucideIcon,
+  Settings, Users, Sparkles, Truck, HandCoins, Swords, X, type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -36,6 +36,7 @@ const GROUPS: { label: string; items: Item[] }[] = [
       { href: "/decide", label: "Cosa giochiamo", icon: Dice5 },
       { href: "/plays", label: "Partite", icon: Trophy },
       { href: "/mai-giocati", label: "Mai giocati", icon: Sparkles },
+      { href: "/rivali", label: "Rivali", icon: Swords },
     ],
   },
   {
