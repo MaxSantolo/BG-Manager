@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isNotFound } from "@/lib/dupCheck";
 import { fetchCardSets } from "@/lib/bggCards";
 import { parseCardSets, chosenSet, type CardSet } from "@/lib/cardSizes";
 
@@ -44,4 +45,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!sets?.some((s) => s.id === setId)) return NextResponse.json({ error: "Card set non trovato" }, { status: 404 });
   await prisma.game.update({ where: { id: game.id }, data: { cardSetId: setId } });
   return NextResponse.json({ sets, cardSetId: setId });
+}
+
+/** "Ignora": svuota le carte caricate (non interessano). Le bustine già assegnate restano. */
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  try {
+    await prisma.game.update({
+      where: { id: parseInt(id) },
+      data: { cardTypes: null, cardSetId: null, cardsCheckedAt: null },
+    });
+  } catch (err) {
+    if (isNotFound(err)) return NextResponse.json({ error: "Gioco non trovato" }, { status: 404 });
+    throw err;
+  }
+  return NextResponse.json({ ok: true });
 }

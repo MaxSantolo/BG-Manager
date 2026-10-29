@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download, Layers, Loader2, PackageCheck, RefreshCw } from "lucide-react";
+import { Download, EyeOff, Layers, Loader2, PackageCheck, RefreshCw } from "lucide-react";
 import { apiFetch } from "@/lib/fetchClient";
 import { useToast } from "@/components/Toast";
 import { formatDayNum } from "@/lib/dates";
@@ -35,6 +35,7 @@ export default function CardsPanel({ gameId, initialSets, initialSetId, initialC
   const [checkedAt, setCheckedAt] = useState(initialCheckedAt);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const set = useMemo(() => chosenSet(sets, setId), [sets, setId]);
   const assignedBy = new Map(assigned.map((a) => [a.sleeveId, a.qty]));
   const own = [...assignedBy.keys()];
@@ -61,6 +62,16 @@ export default function CardsPanel({ gameId, initialSets, initialSetId, initialC
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ setId: id }),
     });
     if (!res.ok) { setSetId(prev); setRows(rowsFor(chosenSet(sets, prev), formats, own)); show("Scelta non salvata.", "error"); }
+  }
+
+  // "Ignora": via i dati caricati, se quel gioco non interessa. Si ricaricano col tasto.
+  async function ignore() {
+    setClearing(true);
+    const res = await apiFetch(`/api/games/${gameId}/cards`, { method: "DELETE" });
+    setClearing(false);
+    if (!res.ok) { show(res.networkError ? "Connessione assente. Riprova." : "Dati non svuotati.", "error"); return; }
+    setSets(null); setSetId(null); setCheckedAt(null); setRows([]);
+    show("Carte svuotate.", "success");
   }
 
   const patch = (key: string, p: Partial<Row>) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...p } : r)));
@@ -106,7 +117,10 @@ export default function CardsPanel({ gameId, initialSets, initialSetId, initialC
         </p>
       )}
       {sets !== null && sets.length === 0 && (
-        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Su BGG non ci sono carte: niente da imbustare.</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Su BGG non ci sono carte: niente da imbustare.</p>
+          <IgnoreButton busy={clearing} onClick={ignore} />
+        </div>
       )}
 
       {sets && sets.length > 1 && (
@@ -153,12 +167,24 @@ export default function CardsPanel({ gameId, initialSets, initialSetId, initialC
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
               Imbusta assegna i formati spuntati al gioco: per ognuno la quantità sostituisce quella che c&apos;era, e la scorta scala della differenza.
             </p>
-            <button type="button" onClick={sleeve} disabled={saving || totals.size === 0} className="btn-primary text-sm flex items-center gap-1.5">
-              {saving ? <Loader2 size={14} className="animate-spin" /> : <PackageCheck size={14} />} Imbusta
-            </button>
+            <div className="flex items-center gap-2">
+              <IgnoreButton busy={clearing} onClick={ignore} />
+              <button type="button" onClick={sleeve} disabled={saving || totals.size === 0} className="btn-primary text-sm flex items-center gap-1.5">
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <PackageCheck size={14} />} Imbusta
+              </button>
+            </div>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+function IgnoreButton({ busy, onClick }: { busy: boolean; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} disabled={busy} className="btn-ghost text-sm flex items-center gap-1.5"
+      title="Svuota le carte caricate: non interessano">
+      {busy ? <Loader2 size={14} className="animate-spin" /> : <EyeOff size={14} />} Ignora
+    </button>
   );
 }
